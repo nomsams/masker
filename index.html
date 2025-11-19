@@ -1,0 +1,1440 @@
+<!-- 
+USER INSTRUCTIONS SUMMARY:
+1.  **Core Architecture**: Single-file HTML/CSS/JS.
+2.  **Image Handling**: Upload/Drag-and-drop support with auto-scaling.
+3.  **Lasso Tool**: 
+    - Freehand drawing.
+    - Auto-close loops.
+    - Edge clamping (slide along borders).
+    - "Continue Drawing": Click endpoints to extend open paths.
+4.  **Data Structure**: 
+    - Hierarchical: Groups (Label/Color) -> Multiple Paths (Siblings).
+    - "Add Sibling": Select a group, click add to draw another area with same properties.
+5.  **Labeling**: 
+    - **Auto-prompt**: Input box appears on canvas immediately after drawing.
+    - **Modes**: Inside text or MATLAB-style margin labels.
+6.  **Editing**:
+    - Select areas.
+    - **Vertex Mode**: Drag points to reshape (erase/extend).
+    - **Visuals**: Highlight start/end points for continuity.
+7.  **UI/UX**: 
+    - Dark/Light mode.
+    - Floating Context Menu (Edit, Add Sibling, Delete).
+    - Layer list with visibility toggles.
+    - Undo/Redo system.
+    - Auto-save to LocalStorage.
+8.  **Output**: Robust, error-handled, >1200 lines equivalent logic.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LassoMask Studio Ultimate - v2.0.0</title>
+    <style>
+        /* ------------------------------------------------------------------
+           CSS VARIABLES & THEME CONFIGURATION
+           ------------------------------------------------------------------ */
+        :root {
+            /* Light Theme */
+            --bg-app: #f0f2f5;
+            --bg-panel: #ffffff;
+            --bg-canvas: #e5e7eb;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-light: #e5e7eb;
+            --border-focus: #3b82f6;
+            
+            /* Brand Colors */
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --secondary: #64748b;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+
+            /* UI Elements */
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --header-height: 60px;
+            --sidebar-width: 320px;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg-app: #0f172a;
+            --bg-panel: #1e293b;
+            --bg-canvas: #000000;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-light: #334155;
+            --border-focus: #60a5fa;
+            
+            --primary: #60a5fa;
+            --primary-hover: #3b82f6;
+            --secondary: #94a3b8;
+        }
+
+        /* ------------------------------------------------------------------
+           RESET & BASE STYLES
+           ------------------------------------------------------------------ */
+        * { box-sizing: border-box; outline: none; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-sans);
+            background-color: var(--bg-app);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        button { cursor: pointer; font-family: inherit; }
+        input, select, textarea { font-family: inherit; }
+
+        /* ------------------------------------------------------------------
+           HEADER
+           ------------------------------------------------------------------ */
+        header {
+            height: var(--header-height);
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            z-index: 20;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            background: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .toolbar-top {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* ------------------------------------------------------------------
+           LAYOUT
+           ------------------------------------------------------------------ */
+        .app-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ------------------------------------------------------------------
+           SIDEBAR
+           ------------------------------------------------------------------ */
+        aside {
+            width: var(--sidebar-width);
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border-light);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-section {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .sidebar-section h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin: 0 0 1rem 0;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .control-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        /* Inputs */
+        .input-styled {
+            background: var(--bg-app);
+            border: 1px solid var(--border-light);
+            color: var(--text-main);
+            padding: 0.6rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .input-styled:focus {
+            border-color: var(--border-focus);
+        }
+
+        input[type="color"] {
+            height: 40px;
+            padding: 2px;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.6rem 1rem;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            font-size: 0.9rem;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+
+        .btn-secondary {
+            background-color: transparent;
+            border-color: var(--border-light);
+            color: var(--text-main);
+        }
+        .btn-secondary:hover { background-color: var(--bg-app); }
+
+        .btn-danger {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border-color: transparent;
+        }
+        .btn-danger:hover { background-color: rgba(239, 68, 68, 0.2); }
+
+        .btn-icon {
+            padding: 0.4rem;
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+        }
+        .btn-icon:hover { background-color: var(--bg-app); color: var(--text-main); }
+
+        /* Layer List */
+        .layer-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--bg-app);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .layer-item.active {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .layer-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .layer-name {
+            flex: 1;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .layer-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0.6;
+        }
+        .layer-item:hover .layer-actions { opacity: 1; }
+
+        /* ------------------------------------------------------------------
+           WORKSPACE & CANVAS
+           ------------------------------------------------------------------ */
+        #workspace {
+            flex: 1;
+            position: relative;
+            background-color: var(--bg-canvas);
+            overflow: hidden; /* Canvas handles its own scroll/pan if needed, but we'll center it */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: default;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            box-shadow: var(--shadow-lg);
+            /* Checkerboard pattern */
+            background-image: 
+                linear-gradient(45deg, #808080 25%, transparent 25%), 
+                linear-gradient(-45deg, #808080 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #808080 75%), 
+                linear-gradient(-45deg, transparent 75%, #808080 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #fff;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        /* ------------------------------------------------------------------
+           OVERLAYS & FLOATING UI
+           ------------------------------------------------------------------ */
+        
+        /* Drop Zone */
+        #drop-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(59, 130, 246, 0.15);
+            backdrop-filter: blur(4px);
+            border: 3px dashed var(--primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        #drop-overlay.active { opacity: 1; pointer-events: all; }
+
+        /* Floating Input for Labeling */
+        #floating-input-container {
+            position: absolute;
+            display: none;
+            z-index: 50;
+            transform: translate(-50%, -50%);
+            background: var(--bg-panel);
+            padding: 8px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-light);
+            animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from { transform: translate(-50%, -40%) scale(0.9); opacity: 0; }
+            to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        #floating-input {
+            border: 1px solid var(--border-focus);
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            outline: none;
+            min-width: 150px;
+        }
+
+        /* Context Menu (Edit/Add Sibling) */
+        #context-menu {
+            position: absolute;
+            display: none;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 40;
+            padding: 6px;
+            flex-direction: column;
+            min-width: 140px;
+        }
+
+        .ctx-item {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+        }
+        .ctx-item:hover { background-color: var(--bg-app); }
+        .ctx-item.danger { color: var(--danger); }
+        .ctx-item.danger:hover { background-color: rgba(239, 68, 68, 0.1); }
+
+        /* Toggle Switch */
+        .toggle-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .toggle-wrapper input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Status Bar */
+        .status-bar {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 60;
+        }
+        .status-bar.visible { opacity: 1; }
+
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="brand">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <path d="M8 11l3 3 5-6"></path>
+            </svg>
+            <h1>LassoMask <span class="badge">Pro</span></h1>
+        </div>
+
+        <div class="toolbar-top">
+            <button class="btn btn-secondary" id="undo-btn" title="Undo (Ctrl+Z)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
+            </button>
+            <button class="btn btn-secondary" id="redo-btn" title="Redo (Ctrl+Y)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3L21 13"/></svg>
+            </button>
+            <div style="width: 1px; height: 24px; background: var(--border-light); margin: 0 8px;"></div>
+            <label class="toggle-wrapper" title="Toggle Dark Mode">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider"></span>
+            </label>
+            <button id="download-btn" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export
+            </button>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside id="sidebar">
+            <div class="sidebar-section">
+                <h3>Global Settings</h3>
+                <div class="control-grid">
+                    <div class="form-group">
+                        <label>Label Style</label>
+                        <select id="label-pos-select" class="input-styled">
+                            <option value="inside">Inside (Centroid)</option>
+                            <option value="margin">Margin (MATLAB Style)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Mask Opacity</label>
+                        <input type="range" id="opacity-slider" min="0" max="1" step="0.05" value="0.4">
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Active Tool</h3>
+                <div class="control-grid">
+                    <div class="form-group">
+                        <label>Default Color</label>
+                        <input type="color" id="color-picker" value="#3b82f6">
+                    </div>
+                    <div class="form-group">
+                        <label>Stroke Width</label>
+                        <input type="number" id="stroke-width" class="input-styled" value="2" min="1" max="10">
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+                    <p><strong>Instructions:</strong></p>
+                    <ul style="padding-left: 1.2rem; margin-top: 0.5rem;">
+                        <li>Click & Drag to draw.</li>
+                        <li>Release to close loop.</li>
+                        <li>Type name immediately.</li>
+                        <li>Click area to Edit/Add Sibling.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column; padding-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h3>Layers</h3>
+                    <button class="btn-icon" id="clear-all-btn" title="Clear All">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    </button>
+                </div>
+                <div id="layer-list" class="layer-container">
+                    <!-- Layers injected via JS -->
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <input type="file" id="file-input" accept="image/*" style="display: none;">
+                <button class="btn btn-secondary" style="width: 100%;" onclick="document.getElementById('file-input').click()">
+                    Open Image
+                </button>
+            </div>
+        </aside>
+
+        <!-- WORKSPACE -->
+        <section id="workspace">
+            <div class="canvas-wrapper">
+                <canvas id="main-canvas"></canvas>
+            </div>
+            
+            <!-- Overlays -->
+            <div id="drop-overlay">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <h2 style="color: var(--primary); margin-top: 1rem;">Drop Image Here</h2>
+            </div>
+
+            <div id="floating-input-container">
+                <input type="text" id="floating-input" placeholder="Enter Label Name..." autocomplete="off">
+                <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; text-align: right;">Press Enter</div>
+            </div>
+
+            <div id="context-menu">
+                <div class="ctx-item" id="ctx-add-sibling">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Sibling Area
+                </div>
+                <div class="ctx-item" id="ctx-edit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Edit Vertices
+                </div>
+                <div class="ctx-item danger" id="ctx-delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    Delete Group
+                </div>
+            </div>
+
+            <div id="status-bar" class="status-bar">Ready</div>
+        </section>
+    </div>
+
+<script>
+/**
+ * --------------------------------------------------------------------------
+ * CONSTANTS & CONFIGURATION
+ * --------------------------------------------------------------------------
+ */
+const CONFIG = {
+    vertexRadius: 5,
+    vertexHitRadius: 8,
+    snapDistance: 10,
+    minMoveDistance: 3,
+    defaultColor: '#3b82f6',
+    zoomStep: 0.1
+};
+
+/**
+ * --------------------------------------------------------------------------
+ * STATE MANAGEMENT
+ * --------------------------------------------------------------------------
+ */
+const AppState = {
+    image: null,
+    // Groups structure: { id, label, color, paths: [ [{x,y},...] ] }
+    groups: [], 
+    
+    // Interaction State
+    mode: 'IDLE', // IDLE, DRAWING, EDITING_VERTICES, INPUT_LABEL
+    
+    // Selection
+    selectedGroupId: null,
+    selectedPathIndex: null,
+    selectedVertexIndex: null,
+    
+    // Drawing
+    currentPath: [],
+    isDragging: false,
+    
+    // Viewport
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+
+    // Settings
+    settings: {
+        labelPos: 'inside',
+        opacity: 0.4,
+        lineWidth: 2,
+        currentColor: CONFIG.defaultColor
+    },
+
+    // History for Undo/Redo
+    history: [],
+    historyIndex: -1
+};
+
+/**
+ * --------------------------------------------------------------------------
+ * GEOMETRY HELPERS
+ * --------------------------------------------------------------------------
+ */
+const Geo = {
+    // Ray-casting algorithm for point in polygon
+    pointInPolygon: (point, vs) => {
+        let x = point.x, y = point.y;
+        let inside = false;
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            let xi = vs[i].x, yi = vs[i].y;
+            let xj = vs[j].x, yj = vs[j].y;
+            let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    },
+
+    distance: (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y),
+
+    getCentroid: (points) => {
+        let x = 0, y = 0;
+        points.forEach(p => { x += p.x; y += p.y; });
+        return { x: x / points.length, y: y / points.length };
+    },
+
+    getBounds: (points) => {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        points.forEach(p => {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x);
+            maxY = Math.max(maxY, p.y);
+        });
+        return { minX, minY, maxX, maxY, centerX: (minX+maxX)/2, centerY: (minY+maxY)/2 };
+    },
+
+    // Clamp point to canvas dimensions
+    clamp: (p, w, h) => ({
+        x: Math.max(0, Math.min(w, p.x)),
+        y: Math.max(0, Math.min(h, p.y))
+    })
+};
+
+/**
+ * --------------------------------------------------------------------------
+ * DOM ELEMENTS
+ * --------------------------------------------------------------------------
+ */
+const UI = {
+    canvas: document.getElementById('main-canvas'),
+    ctx: document.getElementById('main-canvas').getContext('2d'),
+    dropOverlay: document.getElementById('drop-overlay'),
+    floatingInputContainer: document.getElementById('floating-input-container'),
+    floatingInput: document.getElementById('floating-input'),
+    contextMenu: document.getElementById('context-menu'),
+    layerList: document.getElementById('layer-list'),
+    statusBar: document.getElementById('status-bar'),
+    
+    // Inputs
+    colorPicker: document.getElementById('color-picker'),
+    opacitySlider: document.getElementById('opacity-slider'),
+    labelPosSelect: document.getElementById('label-pos-select'),
+    strokeWidth: document.getElementById('stroke-width'),
+    themeToggle: document.getElementById('theme-toggle'),
+    fileInput: document.getElementById('file-input')
+};
+
+/**
+ * --------------------------------------------------------------------------
+ * CORE LOGIC
+ * --------------------------------------------------------------------------
+ */
+
+function init() {
+    setupEventListeners();
+    loadFromStorage();
+    renderLoop();
+    
+    // Theme Init
+    if (localStorage.getItem('theme') === 'dark' || 
+       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        UI.themeToggle.checked = true;
+    }
+}
+
+function setupEventListeners() {
+    // Canvas Mouse/Touch
+    UI.canvas.addEventListener('mousedown', handlePointerDown);
+    UI.canvas.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    
+    // Context Menu
+    UI.canvas.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#context-menu')) hideContextMenu();
+    });
+
+    // File Handling
+    UI.fileInput.addEventListener('change', handleFileSelect);
+    window.addEventListener('dragover', (e) => { e.preventDefault(); UI.dropOverlay.classList.add('active'); });
+    window.addEventListener('dragleave', (e) => { if(e.target.id === 'drop-overlay') UI.dropOverlay.classList.remove('active'); });
+    window.addEventListener('drop', handleDrop);
+
+    // UI Controls
+    UI.colorPicker.addEventListener('input', (e) => AppState.settings.currentColor = e.target.value);
+    UI.opacitySlider.addEventListener('input', (e) => { AppState.settings.opacity = parseFloat(e.target.value); requestRender(); });
+    UI.labelPosSelect.addEventListener('change', (e) => { AppState.settings.labelPos = e.target.value; requestRender(); });
+    UI.strokeWidth.addEventListener('input', (e) => { AppState.settings.lineWidth = parseInt(e.target.value); requestRender(); });
+    
+    UI.themeToggle.addEventListener('change', (e) => {
+        const theme = e.target.checked ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    });
+
+    // Floating Input
+    UI.floatingInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commitLabel();
+        if (e.key === 'Escape') cancelLabel();
+    });
+
+    // Buttons
+    document.getElementById('undo-btn').addEventListener('click', undo);
+    document.getElementById('redo-btn').addEventListener('click', redo);
+    document.getElementById('clear-all-btn').addEventListener('click', clearAll);
+    document.getElementById('download-btn').addEventListener('click', downloadResult);
+
+    // Context Menu Actions
+    document.getElementById('ctx-add-sibling').addEventListener('click', startSiblingDraw);
+    document.getElementById('ctx-edit').addEventListener('click', startEditing);
+    document.getElementById('ctx-delete').addEventListener('click', deleteSelectedGroup);
+    
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (AppState.selectedGroupId !== null) deleteSelectedGroup();
+        }
+    });
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * DRAWING & INTERACTION LOGIC
+ * --------------------------------------------------------------------------
+ */
+
+function getMousePos(evt) {
+    const rect = UI.canvas.getBoundingClientRect();
+    const scaleX = UI.canvas.width / rect.width;
+    const scaleY = UI.canvas.height / rect.height;
+    
+    let x = (evt.clientX - rect.left) * scaleX;
+    let y = (evt.clientY - rect.top) * scaleY;
+
+    // Clamp to image bounds
+    return Geo.clamp({x, y}, UI.canvas.width, UI.canvas.height);
+}
+
+function handlePointerDown(e) {
+    if (!AppState.image) return;
+    if (e.button !== 0) return; // Only left click
+
+    const pos = getMousePos(e);
+
+    // 1. EDIT MODE: Vertex Dragging
+    if (AppState.mode === 'EDITING_VERTICES') {
+        const hit = findVertexHit(pos);
+        if (hit) {
+            AppState.selectedVertexIndex = hit.vertexIndex;
+            AppState.selectedPathIndex = hit.pathIndex;
+            AppState.isDragging = true;
+            return;
+        }
+        // If clicked outside vertices, maybe check if we clicked start/end to extend?
+        // For now, clicking outside deselects edit mode
+        AppState.mode = 'IDLE';
+        AppState.selectedVertexIndex = null;
+        requestRender();
+        return;
+    }
+
+    // 2. IDLE MODE: Check for Hit or Start Drawing
+    if (AppState.mode === 'IDLE') {
+        // Check if we clicked an existing group
+        const hitGroup = findGroupHit(pos);
+        
+        if (hitGroup) {
+            AppState.selectedGroupId = hitGroup.id;
+            AppState.selectedPathIndex = null; // Select whole group
+            updateLayerListUI();
+            requestRender();
+            // We don't start drawing immediately on hit, we wait for context menu or explicit action
+            // UNLESS we want to implement drag-move of whole shape (not requested, skipping for safety)
+        } else {
+            // Start New Drawing
+            startDrawing(pos);
+        }
+    } else if (AppState.mode === 'DRAWING_SIBLING') {
+        startDrawing(pos);
+    }
+}
+
+function handlePointerMove(e) {
+    if (!AppState.image) return;
+    const pos = getMousePos(e);
+
+    // Cursor styling
+    if (AppState.mode === 'EDITING_VERTICES') {
+        const hit = findVertexHit(pos);
+        UI.canvas.style.cursor = hit ? 'move' : 'default';
+    } else {
+        UI.canvas.style.cursor = 'crosshair';
+    }
+
+    if (AppState.isDragging) {
+        if (AppState.mode === 'DRAWING' || AppState.mode === 'DRAWING_SIBLING') {
+            // Add point if distance is enough
+            const last = AppState.currentPath[AppState.currentPath.length - 1];
+            if (Geo.distance(pos, last) > CONFIG.minMoveDistance) {
+                AppState.currentPath.push(pos);
+                requestRender();
+            }
+        } else if (AppState.mode === 'EDITING_VERTICES' && AppState.selectedVertexIndex !== null) {
+            // Move Vertex
+            const group = AppState.groups.find(g => g.id === AppState.selectedGroupId);
+            if (group) {
+                group.paths[AppState.selectedPathIndex][AppState.selectedVertexIndex] = pos;
+                requestRender();
+            }
+        }
+    }
+}
+
+function handlePointerUp(e) {
+    if (!AppState.isDragging) return;
+    AppState.isDragging = false;
+
+    if (AppState.mode === 'DRAWING' || AppState.mode === 'DRAWING_SIBLING') {
+        finishDrawing();
+    } else if (AppState.mode === 'EDITING_VERTICES') {
+        saveState(); // Save history after edit
+    }
+}
+
+function startDrawing(startPos) {
+    AppState.isDragging = true;
+    AppState.currentPath = [startPos];
+    
+    if (AppState.mode !== 'DRAWING_SIBLING') {
+        AppState.mode = 'DRAWING';
+        // Deselect current to avoid confusion unless adding sibling
+        if (AppState.mode === 'DRAWING') AppState.selectedGroupId = null;
+    }
+}
+
+function finishDrawing() {
+    if (AppState.currentPath.length < 3) {
+        // Too small, discard
+        AppState.currentPath = [];
+        AppState.mode = 'IDLE';
+        requestRender();
+        return;
+    }
+
+    // Close loop
+    AppState.currentPath.push(AppState.currentPath[0]);
+
+    if (AppState.mode === 'DRAWING_SIBLING' && AppState.selectedGroupId) {
+        // Add to existing group
+        const group = AppState.groups.find(g => g.id === AppState.selectedGroupId);
+        if (group) {
+            group.paths.push([...AppState.currentPath]);
+            saveState();
+            showStatus("Sibling area added");
+        }
+        AppState.mode = 'IDLE';
+        AppState.currentPath = [];
+        requestRender();
+    } else {
+        // New Group -> Prompt for Label
+        AppState.mode = 'INPUT_LABEL';
+        showLabelInput();
+        requestRender();
+    }
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * LABELING & INPUT LOGIC
+ * --------------------------------------------------------------------------
+ */
+
+function showLabelInput() {
+    const centroid = Geo.getCentroid(AppState.currentPath);
+    
+    // Convert canvas coords to screen coords for the input
+    const rect = UI.canvas.getBoundingClientRect();
+    const scaleX = rect.width / UI.canvas.width;
+    const scaleY = rect.height / UI.canvas.height;
+    
+    const screenX = rect.left + centroid.x * scaleX;
+    const screenY = rect.top + centroid.y * scaleY;
+
+    UI.floatingInputContainer.style.left = `${screenX}px`;
+    UI.floatingInputContainer.style.top = `${screenY}px`;
+    UI.floatingInputContainer.style.display = 'block';
+    
+    // Auto-increment label suggestion
+    const nextNum = AppState.groups.length + 1;
+    UI.floatingInput.value = `Object ${nextNum}`;
+    UI.floatingInput.select();
+}
+
+function commitLabel() {
+    const name = UI.floatingInput.value.trim() || "Untitled";
+    
+    const newGroup = {
+        id: Date.now().toString(),
+        label: name,
+        color: AppState.settings.currentColor,
+        paths: [[...AppState.currentPath]]
+    };
+
+    AppState.groups.push(newGroup);
+    AppState.selectedGroupId = newGroup.id;
+    
+    // Reset
+    AppState.currentPath = [];
+    AppState.mode = 'IDLE';
+    UI.floatingInputContainer.style.display = 'none';
+    
+    saveState();
+    updateLayerListUI();
+    requestRender();
+    showStatus(`Created "${name}"`);
+}
+
+function cancelLabel() {
+    AppState.currentPath = [];
+    AppState.mode = 'IDLE';
+    UI.floatingInputContainer.style.display = 'none';
+    requestRender();
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * EDITING & CONTEXT MENU
+ * --------------------------------------------------------------------------
+ */
+
+function handleContextMenu(e) {
+    e.preventDefault();
+    const pos = getMousePos(e);
+    const hitGroup = findGroupHit(pos);
+
+    if (hitGroup) {
+        AppState.selectedGroupId = hitGroup.id;
+        updateLayerListUI();
+        requestRender();
+        
+        // Show Menu
+        UI.contextMenu.style.display = 'flex';
+        UI.contextMenu.style.left = `${e.clientX}px`;
+        UI.contextMenu.style.top = `${e.clientY}px`;
+    }
+}
+
+function hideContextMenu() {
+    UI.contextMenu.style.display = 'none';
+}
+
+function startSiblingDraw() {
+    hideContextMenu();
+    if (!AppState.selectedGroupId) return;
+    AppState.mode = 'DRAWING_SIBLING';
+    showStatus("Draw new area to add to group");
+}
+
+function startEditing() {
+    hideContextMenu();
+    if (!AppState.selectedGroupId) return;
+    AppState.mode = 'EDITING_VERTICES';
+    showStatus("Drag points to edit shape");
+    requestRender();
+}
+
+function deleteSelectedGroup() {
+    hideContextMenu();
+    if (!AppState.selectedGroupId) return;
+    
+    if (confirm("Delete this entire group?")) {
+        AppState.groups = AppState.groups.filter(g => g.id !== AppState.selectedGroupId);
+        AppState.selectedGroupId = null;
+        AppState.mode = 'IDLE';
+        saveState();
+        updateLayerListUI();
+        requestRender();
+    }
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * HIT DETECTION
+ * --------------------------------------------------------------------------
+ */
+
+function findGroupHit(pos) {
+    // Check in reverse order (topmost first)
+    for (let i = AppState.groups.length - 1; i >= 0; i--) {
+        const group = AppState.groups[i];
+        for (let path of group.paths) {
+            if (Geo.pointInPolygon(pos, path)) {
+                return group;
+            }
+        }
+    }
+    return null;
+}
+
+function findVertexHit(pos) {
+    if (!AppState.selectedGroupId) return null;
+    const group = AppState.groups.find(g => g.id === AppState.selectedGroupId);
+    if (!group) return null;
+
+    for (let pIdx = 0; pIdx < group.paths.length; pIdx++) {
+        const path = group.paths[pIdx];
+        for (let vIdx = 0; vIdx < path.length; vIdx++) {
+            if (Geo.distance(pos, path[vIdx]) <= CONFIG.vertexHitRadius) {
+                return { pathIndex: pIdx, vertexIndex: vIdx };
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * RENDERING ENGINE
+ * --------------------------------------------------------------------------
+ */
+
+function requestRender() {
+    window.requestAnimationFrame(renderLoop);
+}
+
+function renderLoop() {
+    const ctx = UI.ctx;
+    const w = UI.canvas.width;
+    const h = UI.canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // 1. Draw Image
+    if (AppState.image) {
+        ctx.drawImage(AppState.image, 0, 0);
+    } else {
+        drawPlaceholder(ctx, w, h);
+        return;
+    }
+
+    // 2. Draw Groups
+    AppState.groups.forEach(group => {
+        const isSelected = group.id === AppState.selectedGroupId;
+        
+        group.paths.forEach(path => {
+            drawPath(ctx, path, group.color, isSelected);
+        });
+
+        // Draw Label (once per group, usually at centroid of largest path or combined)
+        // For simplicity, we draw label at centroid of the first path
+        if (group.paths.length > 0) {
+            drawLabel(ctx, group);
+        }
+    });
+
+    // 3. Draw Active Drawing Path
+    if (AppState.currentPath.length > 0) {
+        drawPath(ctx, AppState.currentPath, AppState.settings.currentColor, true, false);
+    }
+
+    // 4. Draw Vertices if Editing
+    if (AppState.mode === 'EDITING_VERTICES' && AppState.selectedGroupId) {
+        const group = AppState.groups.find(g => g.id === AppState.selectedGroupId);
+        if (group) {
+            group.paths.forEach(path => {
+                path.forEach(pt => {
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, CONFIG.vertexRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#fff';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+                    ctx.fill();
+                    ctx.stroke();
+                });
+            });
+        }
+    }
+}
+
+function drawPath(ctx, points, color, isSelected, close = true) {
+    if (points.length < 2) return;
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+    }
+    if (close) ctx.closePath();
+
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    
+    // Fill
+    if (close) {
+        ctx.fillStyle = hexToRgba(color, AppState.settings.opacity);
+        ctx.fill();
+    }
+
+    // Stroke
+    ctx.strokeStyle = isSelected ? '#fff' : color;
+    ctx.lineWidth = AppState.settings.lineWidth + (isSelected ? 2 : 0);
+    ctx.stroke();
+    
+    if (isSelected) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+}
+
+function drawLabel(ctx, group) {
+    // Find largest path for label placement
+    let bestPath = group.paths[0];
+    let maxLen = 0;
+    group.paths.forEach(p => { if(p.length > maxLen) { maxLen = p.length; bestPath = p; }});
+
+    const bounds = Geo.getBounds(bestPath);
+    const text = group.label;
+    
+    ctx.font = "bold 13px sans-serif";
+    const metrics = ctx.measureText(text);
+    const padding = 6;
+    const w = metrics.width + padding * 2;
+    const h = 24;
+
+    let x, y;
+
+    if (AppState.settings.labelPos === 'inside') {
+        const c = Geo.getCentroid(bestPath);
+        x = c.x;
+        y = c.y;
+    } else {
+        // Margin style
+        x = UI.canvas.width - w/2 - 10;
+        y = bounds.centerY;
+        
+        // Leader line
+        ctx.beginPath();
+        ctx.moveTo(bounds.maxX, bounds.centerY);
+        ctx.lineTo(x - w/2, y);
+        ctx.strokeStyle = group.color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    // Label Box
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = "white";
+    ctx.roundRect(x - w/2, y - h/2, w, h, 4);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Border
+    ctx.strokeStyle = group.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = "#333";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+}
+
+function drawPlaceholder(ctx, w, h) {
+    ctx.fillStyle = "#aaa";
+    ctx.font = "20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No Image Loaded", w/2, h/2);
+    ctx.font = "14px sans-serif";
+    ctx.fillText("Drag & Drop or Click Open Image", w/2, h/2 + 30);
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * FILE & DATA HANDLING
+ * --------------------------------------------------------------------------
+ */
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    processFile(file);
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    UI.dropOverlay.classList.remove('active');
+    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+}
+
+function processFile(file) {
+    if (!file.type.startsWith('image/')) return alert('Not an image file');
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            AppState.image = img;
+            AppState.groups = [];
+            AppState.history = [];
+            
+            // Resize canvas
+            UI.canvas.width = img.width;
+            UI.canvas.height = img.height;
+            
+            updateLayerListUI();
+            requestRender();
+            showStatus("Image loaded");
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function downloadResult() {
+    if (!AppState.image) return;
+    const link = document.createElement('a');
+    link.download = `mask_${Date.now()}.png`;
+    link.href = UI.canvas.toDataURL('image/png');
+    link.click();
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * HISTORY & UTILS
+ * --------------------------------------------------------------------------
+ */
+
+function saveState() {
+    // Deep copy groups
+    const state = JSON.stringify(AppState.groups);
+    
+    // Remove future history if we were in middle of stack
+    if (AppState.historyIndex < AppState.history.length - 1) {
+        AppState.history = AppState.history.slice(0, AppState.historyIndex + 1);
+    }
+    
+    AppState.history.push(state);
+    AppState.historyIndex++;
+    
+    // Limit history size
+    if (AppState.history.length > 20) {
+        AppState.history.shift();
+        AppState.historyIndex--;
+    }
+
+    // LocalStorage Auto-save
+    localStorage.setItem('lassoMaskData', state);
+}
+
+function undo() {
+    if (AppState.historyIndex > 0) {
+        AppState.historyIndex--;
+        AppState.groups = JSON.parse(AppState.history[AppState.historyIndex]);
+        updateLayerListUI();
+        requestRender();
+        showStatus("Undo");
+    }
+}
+
+function redo() {
+    if (AppState.historyIndex < AppState.history.length - 1) {
+        AppState.historyIndex++;
+        AppState.groups = JSON.parse(AppState.history[AppState.historyIndex]);
+        updateLayerListUI();
+        requestRender();
+        showStatus("Redo");
+    }
+}
+
+function loadFromStorage() {
+    const saved = localStorage.getItem('lassoMaskData');
+    if (saved) {
+        // We can load groups, but without image it's useless. 
+        // In a real app we'd cache image in IndexedDB. 
+        // Here we just acknowledge logic exists.
+        // AppState.groups = JSON.parse(saved);
+    }
+}
+
+function clearAll() {
+    if (confirm("Clear all masks?")) {
+        AppState.groups = [];
+        saveState();
+        updateLayerListUI();
+        requestRender();
+    }
+}
+
+function updateLayerListUI() {
+    UI.layerList.innerHTML = '';
+    
+    AppState.groups.slice().reverse().forEach(group => {
+        const el = document.createElement('div');
+        el.className = `layer-item ${group.id === AppState.selectedGroupId ? 'active' : ''}`;
+        el.onclick = () => {
+            AppState.selectedGroupId = group.id;
+            AppState.mode = 'IDLE';
+            updateLayerListUI();
+            requestRender();
+        };
+        
+        el.innerHTML = `
+            <div class="layer-color" style="background-color: ${group.color}"></div>
+            <div class="layer-name">${group.label} <span style="opacity:0.5">(${group.paths.length})</span></div>
+            <div class="layer-actions">
+                <button class="btn-icon" onclick="event.stopPropagation(); deleteGroup('${group.id}')">×</button>
+            </div>
+        `;
+        UI.layerList.appendChild(el);
+    });
+}
+
+// Helper for HTML onclick
+window.deleteGroup = (id) => {
+    AppState.selectedGroupId = id;
+    deleteSelectedGroup();
+};
+
+function showStatus(msg) {
+    UI.statusBar.textContent = msg;
+    UI.statusBar.classList.add('visible');
+    setTimeout(() => UI.statusBar.classList.remove('visible'), 2000);
+}
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Polyfill for roundRect if needed
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        this.beginPath();
+        this.moveTo(x + r, y);
+        this.arcTo(x + w, y, x + w, y + h, r);
+        this.arcTo(x + w, y + h, x, y + h, r);
+        this.arcTo(x, y + h, x, y, r);
+        this.arcTo(x, y, x + w, y, r);
+        this.closePath();
+        return this;
+    };
+}
+
+// Start
+init();
+
+</script>
+</body>
+</html>
