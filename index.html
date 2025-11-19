@@ -1,32 +1,32 @@
 <!-- 
-LASSOMASK STUDIO ULTIMATE v3.5 - VC DEMO BUILD
+LASSOMASK STUDIO ULTIMATE v4.0
 ---------------------------------------------------
 USER INSTRUCTIONS:
 
-1.  **Navigation**:
-    -   **Zoom**: Mouse Wheel or UI Buttons.
-    -   **Pan**: Hold SPACE + Drag, or Middle Mouse Button.
+1.  **Tools**:
+    -   **Lasso (D)**: Standard area selection.
+    -   **Arrow (A)**: Draws a smoothed line with an arrowhead at the end.
+    -   **Hand (Space)**: Pan the canvas OR Drag Labels to reposition them.
 
-2.  **Drawing**:
-    -   **Freehand**: Click and Drag.
-    -   **Polyline**: Click, move, click again.
-    -   **Close Loop**: Click the Green Start Point or Double Click.
+2.  **Drawing Behavior**:
+    -   **Hold to Draw**: Enabled by default. Click & Drag to draw, release to finish. 
+    -   Disable this in settings to use the old "Click-Click" Polyline mode.
 
-3.  **Accessibility & Visualization**:
-    -   **Pattern Mode**: Toggle "Pattern Fill" to use geometric textures (stripes, dots) instead of just solid colors. Ideal for color blindness.
-    -   **Legend Mode**: Switch Label Style to "Legend Box" to see a MATLAB-style list in the corner.
+3.  **Labels**:
+    -   **Auto-Placement**: Labels inside large areas, outside small areas.
+    -   **Manual Placement**: Use the Hand tool to drag a label anywhere.
 
 4.  **Organization**:
-    -   **Siblings**: Right-click an area -> "Add Sibling" to add disconnected parts to the same group.
-    -   **Auto-Color**: Colors cycle automatically.
+    -   **Siblings**: Right-click -> "Add Sibling" to add parts to a group.
+    -   **Pattern Mode**: Geometric fills for color blindness.
 
 5.  **Export**:
-    -   **Export Result**: Downloads full-res PNG with masks, patterns, and legend burned in.
-    -   **Export JSON**: Data for ML training.
+    -   **Export Result**: PNG with all arrows, labels, and masks burned in.
+    -   **Export JSON**: Includes arrow paths and label positions.
 
 6.  **Shortcuts**:
     -   `Ctrl+Z`: Undo
-    -   `Space`: Pan
+    -   `Space`: Toggle Hand Tool
     -   `[` / `]`: Brush Size
 -->
 
@@ -35,7 +35,7 @@ USER INSTRUCTIONS:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LassoMask Studio Ultimate v3.5</title>
+    <title>LassoMask Studio Ultimate v4.0</title>
     <style>
         /* ------------------------------------------------------------------
            THEME & VARIABLES
@@ -46,7 +46,7 @@ USER INSTRUCTIONS:
             --bg-canvas: #e2e8f0;
             --text-main: #0f172a;
             --text-muted: #64748b;
-            --border: #e2e8f0;
+            --border: #cbd5e1;
             --primary: #3b82f6;
             --primary-hover: #2563eb;
             --danger: #ef4444;
@@ -119,9 +119,9 @@ USER INSTRUCTIONS:
         .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
         .btn-sec { background: transparent; border-color: var(--border); color: var(--text-main); }
         .btn-sec:hover { background: var(--bg-app); }
-        .btn-icon { padding: 8px; border-radius: 50%; color: var(--text-muted); background: transparent; border: none; cursor: pointer; }
-        .btn-icon:hover { background: var(--bg-app); color: var(--text-main); }
-        .btn-icon.active { background: var(--primary); color: white; }
+        .btn-icon { padding: 8px; border-radius: 6px; color: var(--text-muted); background: transparent; border: 1px solid transparent; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+        .btn-icon:hover { background: var(--bg-app); color: var(--text-main); border-color: var(--border); }
+        .btn-icon.active { background: var(--primary); color: white; border-color: var(--primary); }
 
         aside {
             width: var(--sidebar-w);
@@ -232,7 +232,7 @@ USER INSTRUCTIONS:
     <header>
         <div class="logo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            LassoMask <span>Studio</span> <span class="version-tag">v3.5</span>
+            LassoMask <span>Studio</span> <span class="version-tag">v4.0</span>
         </div>
         <div class="toolbar">
             <button class="btn-icon" id="undo-btn" title="Undo (Ctrl+Z)">↩</button>
@@ -252,11 +252,25 @@ USER INSTRUCTIONS:
             <div class="panel-section">
                 <div class="panel-title">Tools</div>
                 <div class="control-row">
-                    <label>Mode</label>
+                    <label>Active Tool</label>
                     <div style="display:flex; gap:4px;">
-                        <button class="btn-icon active" id="tool-draw" title="Draw (D)">✎</button>
-                        <button class="btn-icon" id="tool-pan" title="Pan (Space)">✋</button>
+                        <button class="btn-icon active" id="tool-draw" title="Lasso (D)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </button>
+                        <button class="btn-icon" id="tool-arrow" title="Arrow (A)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </button>
+                        <button class="btn-icon" id="tool-pan" title="Hand/Move Labels (Space)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v0"/><path d="M14 10V4a2 2 0 00-2-2v0a2 2 0 00-2 2v2"/><path d="M10 10.5V6a2 2 0 00-2-2v0a2 2 0 00-2 2v8"/><path d="M18 8a2 2 0 114 0v6a8 8 0 01-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 012.83-2.82L7 15"/></svg>
+                        </button>
                     </div>
+                </div>
+                <div class="control-row">
+                    <label>Hold to Draw</label>
+                    <label class="toggle-switch" title="Release mouse to finish shape">
+                        <input type="checkbox" id="hold-draw-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
                 </div>
                 <div class="control-row">
                     <label>Pattern Fill (CVD)</label>
@@ -280,8 +294,8 @@ USER INSTRUCTIONS:
                 <div class="control-row">
                     <label>Label Style</label>
                     <select id="label-mode">
-                        <option value="inside">Inside (Transparent)</option>
-                        <option value="legend">Legend Box (MATLAB)</option>
+                        <option value="inside">Smart Labels</option>
+                        <option value="legend">Legend Box</option>
                     </select>
                 </div>
             </div>
@@ -289,7 +303,7 @@ USER INSTRUCTIONS:
             <div class="panel-section" style="flex:1; display:flex; flex-direction:column; padding-bottom:0;">
                 <div class="control-row">
                     <div class="panel-title" style="margin:0;">Layers</div>
-                    <button class="btn-icon" id="clear-all" style="font-size:0.7rem;">Clear All</button>
+                    <button class="btn-icon" id="clear-all" style="font-size:0.7rem; padding:4px 8px;">Clear All</button>
                 </div>
                 <div id="layer-list" class="layer-list"></div>
             </div>
@@ -351,7 +365,6 @@ const Config = {
     simplifyEpsilon: 1.5
 };
 
-// High contrast palette
 const PALETTE = [
     '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', 
     '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'
@@ -359,7 +372,7 @@ const PALETTE = [
 
 const State = {
     image: null,
-    groups: [], // { id, label, color, paths: [[{x,y}]] }
+    groups: [], // { id, label, color, type: 'poly'|'arrow', paths: [[{x,y}]], labelPos: {x,y}|null }
     
     // Viewport
     scale: 1,
@@ -367,7 +380,8 @@ const State = {
     panY: 0,
     
     // Interaction
-    tool: 'draw',
+    tool: 'draw', // 'draw', 'arrow', 'pan'
+    drawBehavior: 'hold', // 'hold', 'click'
     isDragging: false,
     isPanning: false,
     lastMouse: { x: 0, y: 0 },
@@ -382,6 +396,7 @@ const State = {
     hoveredVertex: null,
     hoveredEdge: null,
     draggingVertex: null,
+    draggingLabel: null, // groupId
     
     // History
     history: [],
@@ -409,7 +424,6 @@ const ui = {
     colorPicker: document.getElementById('color-picker')
 };
 
-// Pattern Cache
 const patternCache = {};
 
 /**
@@ -442,6 +456,7 @@ function init() {
     document.getElementById('clear-all').addEventListener('click', clearAll);
     
     document.getElementById('tool-draw').addEventListener('click', () => setTool('draw'));
+    document.getElementById('tool-arrow').addEventListener('click', () => setTool('arrow'));
     document.getElementById('tool-pan').addEventListener('click', () => setTool('pan'));
     
     document.getElementById('zoom-in').addEventListener('click', () => zoom(1));
@@ -453,10 +468,8 @@ function init() {
     document.getElementById('stroke-slider').addEventListener('input', e => { State.strokeWidth = parseInt(e.target.value); render(); });
     document.getElementById('opacity-slider').addEventListener('input', e => { State.opacity = parseFloat(e.target.value); render(); });
     document.getElementById('label-mode').addEventListener('change', e => { State.labelMode = e.target.value; render(); });
-    document.getElementById('pattern-toggle').addEventListener('change', e => { 
-        State.patternMode = e.target.checked; 
-        render(); 
-    });
+    document.getElementById('pattern-toggle').addEventListener('change', e => { State.patternMode = e.target.checked; render(); });
+    document.getElementById('hold-draw-toggle').addEventListener('change', e => { State.drawBehavior = e.target.checked ? 'hold' : 'click'; });
 
     // Context Menu
     document.getElementById('ctx-sibling').addEventListener('click', addSibling);
@@ -483,7 +496,7 @@ function init() {
 
 /**
  * --------------------------------------------------------------------------
- * PATTERN GENERATION (CVD Support)
+ * PATTERN GENERATION
  * --------------------------------------------------------------------------
  */
 function createPattern(color, index) {
@@ -496,33 +509,21 @@ function createPattern(color, index) {
     pCanvas.width = size;
     pCanvas.height = size;
 
-    // Base transparent background
-    pCtx.fillStyle = hexToRgba(color, 0.1); // Very light background
+    pCtx.fillStyle = hexToRgba(color, 0.1);
     pCtx.fillRect(0, 0, size, size);
 
     pCtx.strokeStyle = color;
     pCtx.fillStyle = color;
     pCtx.lineWidth = 2;
 
-    // 6 Distinct Patterns
     const type = index % 6;
-    
     pCtx.beginPath();
-    if (type === 0) { // Forward Slash
-        pCtx.moveTo(0, size); pCtx.lineTo(size, 0);
-    } else if (type === 1) { // Back Slash
-        pCtx.moveTo(0, 0); pCtx.lineTo(size, size);
-    } else if (type === 2) { // Cross
-        pCtx.moveTo(0, size/2); pCtx.lineTo(size, size/2);
-        pCtx.moveTo(size/2, 0); pCtx.lineTo(size/2, size);
-    } else if (type === 3) { // Dots
-        pCtx.arc(size/2, size/2, 3, 0, Math.PI*2);
-        pCtx.fill();
-    } else if (type === 4) { // Horizontal
-        pCtx.moveTo(0, size/2); pCtx.lineTo(size, size/2);
-    } else if (type === 5) { // Vertical
-        pCtx.moveTo(size/2, 0); pCtx.lineTo(size/2, size);
-    }
+    if (type === 0) { pCtx.moveTo(0, size); pCtx.lineTo(size, 0); }
+    else if (type === 1) { pCtx.moveTo(0, 0); pCtx.lineTo(size, size); }
+    else if (type === 2) { pCtx.moveTo(0, size/2); pCtx.lineTo(size, size/2); pCtx.moveTo(size/2, 0); pCtx.lineTo(size/2, size); }
+    else if (type === 3) { pCtx.arc(size/2, size/2, 3, 0, Math.PI*2); pCtx.fill(); }
+    else if (type === 4) { pCtx.moveTo(0, size/2); pCtx.lineTo(size, size/2); }
+    else if (type === 5) { pCtx.moveTo(size/2, 0); pCtx.lineTo(size/2, size); }
     pCtx.stroke();
 
     const pattern = ctx.createPattern(pCanvas, 'repeat');
@@ -538,10 +539,20 @@ function createPattern(color, index) {
 function onMouseDown(e) {
     if (!State.image) return;
     
+    // Pan Mode or Middle Click
     if (e.button === 1 || (State.tool === 'pan' && e.button === 0)) {
-        State.isPanning = true;
-        State.lastMouse = { x: e.clientX, y: e.clientY };
-        container.style.cursor = 'grabbing';
+        // Check if hitting a label to drag
+        const pt = getWorldPoint(e);
+        const hitLabel = hitTestLabel(pt);
+        
+        if (hitLabel) {
+            State.draggingLabel = hitLabel.id;
+            container.style.cursor = 'move';
+        } else {
+            State.isPanning = true;
+            State.lastMouse = { x: e.clientX, y: e.clientY };
+            container.style.cursor = 'grabbing';
+        }
         return;
     }
 
@@ -557,33 +568,39 @@ function onMouseDown(e) {
         return;
     }
 
-    // 2. Insert Vertex
+    // 2. Insert Vertex (Only for Polygons)
     if (State.hoveredEdge && !State.isDrawing) {
         const { groupId, pathIdx, ptIdx } = State.hoveredEdge;
         const group = State.groups[groupId];
-        group.paths[pathIdx].splice(ptIdx + 1, 0, pt);
-        State.draggingVertex = { groupId, pathIdx, ptIdx: ptIdx + 1 };
-        State.selectedGroupId = group.id;
-        saveState();
-        return;
+        if (group.type !== 'arrow') {
+            group.paths[pathIdx].splice(ptIdx + 1, 0, pt);
+            State.draggingVertex = { groupId, pathIdx, ptIdx: ptIdx + 1 };
+            State.selectedGroupId = group.id;
+            saveState();
+            return;
+        }
     }
 
-    // 3. Drawing
-    if (State.tool === 'draw') {
+    // 3. Drawing (Lasso or Arrow)
+    if (State.tool === 'draw' || State.tool === 'arrow') {
         if (State.isDrawing) {
-            const start = State.activePath[0];
-            const dist = Math.hypot(pt.x - start.x, pt.y - start.y);
-            const screenDist = dist * State.scale;
+            // If in "Click" mode, add point
+            if (State.drawBehavior === 'click') {
+                const start = State.activePath[0];
+                const dist = Math.hypot(pt.x - start.x, pt.y - start.y);
+                const screenDist = dist * State.scale;
 
-            if (State.activePath.length > 2 && screenDist < Config.snapDist) {
-                finishPath();
-            } else {
-                State.activePath.push(pt);
-                State.isDragging = true;
+                if (State.tool === 'draw' && State.activePath.length > 2 && screenDist < Config.snapDist) {
+                    finishPath();
+                } else {
+                    State.activePath.push(pt);
+                    State.isDragging = true;
+                }
             }
         } else {
+            // Start New
             const hitGroup = findGroupHit(pt);
-            if (hitGroup && !State.isDrawing) {
+            if (hitGroup && !State.isDrawing && State.tool === 'draw') {
                 State.selectedGroupId = hitGroup.id;
                 updateLayerUI();
                 render();
@@ -610,6 +627,15 @@ function onMouseMove(e) {
         return;
     }
 
+    if (State.draggingLabel) {
+        const group = State.groups.find(g => g.id === State.draggingLabel);
+        if (group) {
+            group.labelPos = pt;
+            render();
+        }
+        return;
+    }
+
     if (State.draggingVertex) {
         const { groupId, pathIdx, ptIdx } = State.draggingVertex;
         State.groups[groupId].paths[pathIdx][ptIdx] = pt;
@@ -619,7 +645,10 @@ function onMouseMove(e) {
 
     if (State.isDrawing && State.isDragging) {
         const last = State.activePath[State.activePath.length - 1];
-        if (Math.hypot(pt.x - last.x, pt.y - last.y) > 2 / State.scale) {
+        // For arrows, we want smooth updates, for lasso we filter slightly
+        const threshold = State.tool === 'arrow' ? 0 : 2 / State.scale;
+        
+        if (Math.hypot(pt.x - last.x, pt.y - last.y) > threshold) {
             State.activePath.push(pt);
         }
         render();
@@ -631,6 +660,7 @@ function onMouseMove(e) {
 
 function onMouseUp(e) {
     State.isPanning = false;
+    State.draggingLabel = null;
     container.style.cursor = State.tool === 'pan' ? 'grab' : 'crosshair';
 
     if (State.draggingVertex) {
@@ -640,16 +670,23 @@ function onMouseUp(e) {
 
     if (State.isDrawing && State.isDragging) {
         State.isDragging = false;
-        if (State.activePath.length > 10) {
-            State.activePath = simplifyPath(State.activePath, Config.simplifyEpsilon / State.scale);
-        }
         
-        const start = State.activePath[0];
-        const end = State.activePath[State.activePath.length - 1];
-        const dist = Math.hypot(end.x - start.x, end.y - start.y) * State.scale;
-        
-        if (State.activePath.length > 2 && dist < Config.snapDist) {
+        // If "Hold to Draw" is active, finish immediately
+        if (State.drawBehavior === 'hold') {
             finishPath();
+        } else {
+            // Click mode logic
+            if (State.tool === 'arrow') {
+                finishPath(); // Arrows always finish on release in click mode too usually, but let's stick to pattern
+            } else {
+                // Lasso Click Mode: Auto-close if near start
+                const start = State.activePath[0];
+                const end = State.activePath[State.activePath.length - 1];
+                const dist = Math.hypot(end.x - start.x, end.y - start.y) * State.scale;
+                if (State.activePath.length > 2 && dist < Config.snapDist) {
+                    finishPath();
+                }
+            }
         }
     }
     render();
@@ -701,13 +738,31 @@ function onKeyUp(e) {
  * --------------------------------------------------------------------------
  */
 function finishPath() {
-    if (State.activePath.length < 3) return;
-    State.activePath.push({ ...State.activePath[0] }); // Close loop
+    if (State.activePath.length < 2) {
+        State.isDrawing = false;
+        State.activePath = [];
+        render();
+        return;
+    }
+
+    // Process Path based on Tool
+    let finalPath = State.activePath;
     
+    if (State.tool === 'arrow') {
+        // Smooth the arrow line
+        finalPath = smoothPoints(State.activePath);
+    } else {
+        // Lasso: Close loop
+        if (State.activePath.length > 2) {
+            finalPath = simplifyPath(State.activePath, Config.simplifyEpsilon / State.scale);
+            finalPath.push({ ...finalPath[0] });
+        }
+    }
+
     if (State.addingSiblingTo) {
         const group = State.groups.find(g => g.id === State.addingSiblingTo);
         if (group) {
-            group.paths.push([...State.activePath]);
+            group.paths.push(finalPath);
             saveState();
             showStatus("Sibling area added");
         }
@@ -716,13 +771,21 @@ function finishPath() {
         State.activePath = [];
         render();
     } else {
+        State.activePath = finalPath; // Store for label commit
         showLabelInput();
     }
 }
 
 function showLabelInput() {
-    const center = getCentroid(State.activePath);
-    const screen = getScreenPoint(center.x, center.y);
+    // Position input at end of path or center
+    let pos;
+    if (State.tool === 'arrow') {
+        pos = State.activePath[State.activePath.length - 1];
+    } else {
+        pos = getCentroid(State.activePath);
+    }
+    
+    const screen = getScreenPoint(pos.x, pos.y);
     
     ui.floatInput.style.display = 'block';
     ui.floatInput.style.left = screen.x + 'px';
@@ -736,7 +799,6 @@ function showLabelInput() {
 function commitLabel() {
     const label = ui.labelText.value.trim() || "Untitled";
     
-    // Auto-pick color
     const nextColor = PALETTE[State.groups.length % PALETTE.length];
     State.color = nextColor;
     ui.colorPicker.value = nextColor;
@@ -745,7 +807,9 @@ function commitLabel() {
         id: Date.now().toString(),
         label: label,
         color: nextColor,
-        paths: [[...State.activePath]]
+        type: State.tool === 'arrow' ? 'arrow' : 'poly',
+        paths: [[...State.activePath]],
+        labelPos: null // Auto position initially
     };
     
     State.groups.push(newGroup);
@@ -770,6 +834,12 @@ function addSibling() {
     ui.ctxMenu.style.display = 'none';
     if (!State.selectedGroupId) return;
     State.addingSiblingTo = State.selectedGroupId;
+    
+    // Switch tool based on group type
+    const group = State.groups.find(g => g.id === State.selectedGroupId);
+    if (group.type === 'arrow') setTool('arrow');
+    else setTool('draw');
+
     State.isDrawing = true;
     State.activePath = [];
     showStatus("Draw new area to add to group");
@@ -791,12 +861,10 @@ function deleteVertex() {
     if (State.hoveredVertex) {
         const { groupId, pathIdx, ptIdx } = State.hoveredVertex;
         const path = State.groups[groupId].paths[pathIdx];
-        if (path.length > 3) {
+        if (path.length > 2) {
             path.splice(ptIdx, 1);
             saveState();
             render();
-        } else {
-            showStatus("Cannot delete: Path too short");
         }
     }
 }
@@ -814,53 +882,48 @@ function render(targetCtx = ctx, isExport = false) {
     const w = isExport ? State.image.width : canvas.width;
     const h = isExport ? State.image.height : canvas.height;
 
-    // Reset Transform
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
     targetCtx.clearRect(0, 0, w, h);
     
-    // Apply Transform (only for screen render)
     if (!isExport) {
         targetCtx.setTransform(State.scale, 0, 0, State.scale, State.panX, State.panY);
     }
 
-    // 1. Draw Image
     if (State.image) {
         targetCtx.drawImage(State.image, 0, 0);
     }
 
-    // 2. Draw Groups
+    // Draw Groups
     State.groups.forEach((group, index) => {
         const isSelected = !isExport && group.id === State.selectedGroupId;
+        const scale = isExport ? 1 : State.scale;
         
-        // Determine Fill Style (Solid or Pattern)
-        let fillStyle;
-        if (State.patternMode) {
-            fillStyle = createPattern(group.color, index);
-        } else {
-            fillStyle = hexToRgba(group.color, State.opacity);
-        }
-
-        targetCtx.fillStyle = fillStyle;
         targetCtx.strokeStyle = isSelected ? '#fff' : group.color;
-        targetCtx.lineWidth = (State.strokeWidth) / (isExport ? 1 : State.scale);
+        targetCtx.lineWidth = (State.strokeWidth) / scale;
 
+        // Draw Paths
         group.paths.forEach(path => {
-            targetCtx.beginPath();
-            targetCtx.moveTo(path[0].x, path[0].y);
-            for (let i = 1; i < path.length; i++) targetCtx.lineTo(path[i].x, path[i].y);
-            targetCtx.closePath();
-            targetCtx.fill();
-            targetCtx.stroke();
-            
-            if (isSelected) {
-                targetCtx.strokeStyle = group.color;
-                targetCtx.setLineDash([5 / State.scale, 5 / State.scale]);
-                targetCtx.stroke();
-                targetCtx.setLineDash([]);
+            if (group.type === 'arrow') {
+                drawArrow(targetCtx, path, group.color, isSelected, scale);
+            } else {
+                // Polygon
+                let fillStyle;
+                if (State.patternMode) fillStyle = createPattern(group.color, index);
+                else fillStyle = hexToRgba(group.color, State.opacity);
                 
-                // Vertices
+                targetCtx.fillStyle = fillStyle;
+                targetCtx.beginPath();
+                targetCtx.moveTo(path[0].x, path[0].y);
+                for (let i = 1; i < path.length; i++) targetCtx.lineTo(path[i].x, path[i].y);
+                targetCtx.closePath();
+                targetCtx.fill();
+                targetCtx.stroke();
+            }
+
+            // Vertices (Selected only)
+            if (isSelected) {
                 targetCtx.fillStyle = '#fff';
-                const r = Config.vertexRadius / State.scale;
+                const r = Config.vertexRadius / scale;
                 for (let p of path) {
                     targetCtx.beginPath();
                     targetCtx.arc(p.x, p.y, r, 0, Math.PI*2);
@@ -870,18 +933,18 @@ function render(targetCtx = ctx, isExport = false) {
             }
         });
 
-        // Labels (Inside Mode)
+        // Labels
         if (State.labelMode === 'inside' && group.paths.length > 0) {
-            drawInsideLabel(targetCtx, group, isExport);
+            drawSmartLabel(targetCtx, group, isExport);
         }
     });
 
-    // 3. Legend (MATLAB Mode)
+    // Legend
     if (State.labelMode === 'legend' && State.groups.length > 0) {
         drawLegend(targetCtx, isExport);
     }
 
-    // 4. Active Path (Screen only)
+    // Active Path
     if (!isExport && State.activePath.length > 0) {
         targetCtx.beginPath();
         targetCtx.moveTo(State.activePath[0].x, State.activePath[0].y);
@@ -891,45 +954,102 @@ function render(targetCtx = ctx, isExport = false) {
         targetCtx.lineWidth = State.strokeWidth / State.scale;
         targetCtx.stroke();
 
-        // Start Point
-        const start = State.activePath[0];
-        targetCtx.beginPath();
-        targetCtx.arc(start.x, start.y, (Config.snapDist / State.scale), 0, Math.PI*2);
-        targetCtx.fillStyle = 'rgba(0, 255, 0, 0.3)';
-        targetCtx.fill();
-    }
-
-    // 5. Hover (Screen only)
-    if (!isExport && State.hoveredVertex) {
-        const { groupId, pathIdx, ptIdx } = State.hoveredVertex;
-        const pt = State.groups[groupId].paths[pathIdx][ptIdx];
-        targetCtx.beginPath();
-        targetCtx.arc(pt.x, pt.y, (Config.vertexRadius + 2) / State.scale, 0, Math.PI*2);
-        targetCtx.fillStyle = 'red';
-        targetCtx.fill();
+        if (State.tool === 'draw') {
+            const start = State.activePath[0];
+            targetCtx.beginPath();
+            targetCtx.arc(start.x, start.y, (Config.snapDist / State.scale), 0, Math.PI*2);
+            targetCtx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+            targetCtx.fill();
+        }
     }
 }
 
-function drawInsideLabel(ctx, group, isExport) {
-    let path = group.paths.reduce((a, b) => a.length > b.length ? a : b);
-    const center = getCentroid(path);
+function drawArrow(ctx, path, color, isSelected, scale) {
+    if (path.length < 2) return;
+    
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+    ctx.stroke();
+
+    // Arrowhead
+    const end = path[path.length - 1];
+    const prev = path[path.length - 2];
+    const angle = Math.atan2(end.y - prev.y, end.x - prev.x);
+    const headLen = 15 / scale;
+
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(end.x - headLen * Math.cos(angle - Math.PI / 6), end.y - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(end.x - headLen * Math.cos(angle + Math.PI / 6), end.y - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
+function drawSmartLabel(ctx, group, isExport) {
     const scale = isExport ? 1 : State.scale;
     
+    // Determine Position
+    let x, y;
+    let isManual = false;
+
+    if (group.labelPos) {
+        x = group.labelPos.x;
+        y = group.labelPos.y;
+        isManual = true;
+    } else {
+        // Auto calc
+        let path = group.paths[0]; // Use first path for simplicity
+        if (group.type === 'poly') {
+            const c = getCentroid(path);
+            x = c.x; y = c.y;
+        } else {
+            // Arrow: Label at midpoint
+            const mid = Math.floor(path.length / 2);
+            x = path[mid].x; y = path[mid].y;
+        }
+    }
+
     ctx.font = `bold ${14 / scale}px sans-serif`;
     const text = group.label;
     const metrics = ctx.measureText(text);
     const padding = 6 / scale;
     const w = metrics.width + (padding * 2);
     const h = 24 / scale;
-    
-    const x = center.x;
-    const y = center.y;
 
-    // Transparent Background Box
-    ctx.fillStyle = "rgba(255, 255, 255, 0.6)"; // Semi-transparent
+    // Check if small area (Auto-offset logic)
+    let drawLine = isManual;
+    if (!isManual && group.type === 'poly') {
+        const bounds = getBounds(group.paths[0]);
+        if ((bounds.maxX - bounds.minX) < w || (bounds.maxY - bounds.minY) < h) {
+            // Too small, move outside
+            x = bounds.maxX + w/2 + 10/scale;
+            y = bounds.minY - 10/scale;
+            drawLine = true;
+        }
+    }
+
+    // Draw Leader Line
+    if (drawLine) {
+        const origin = group.type === 'poly' ? getCentroid(group.paths[0]) : group.paths[0][Math.floor(group.paths[0].length/2)];
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = group.color;
+        ctx.lineWidth = 1 / scale;
+        ctx.stroke();
+        
+        // Dot at origin
+        ctx.beginPath();
+        ctx.arc(origin.x, origin.y, 3/scale, 0, Math.PI*2);
+        ctx.fillStyle = group.color;
+        ctx.fill();
+    }
+
+    // Box
+    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
     ctx.fillRect(x - w/2, y - h/2, w, h);
-
-    // Border
     ctx.strokeStyle = group.color;
     ctx.lineWidth = 1.5 / scale;
     ctx.strokeRect(x - w/2, y - h/2, w, h);
@@ -942,49 +1062,36 @@ function drawInsideLabel(ctx, group, isExport) {
 }
 
 function drawLegend(ctx, isExport) {
-    // Reset transform to draw in screen coordinates (or image coordinates for export)
-    // For export, we draw relative to image size. For screen, relative to viewport?
-    // Actually, for export consistency, let's draw it in "World Space" but fixed to the top-right corner of the image.
-    
     const scale = isExport ? 1 : State.scale;
     const fontSize = 14 / scale;
     const padding = 10 / scale;
     const lineHeight = 24 / scale;
-    const boxWidth = 150 / scale; // Approximate
+    const boxWidth = 150 / scale;
     const boxHeight = (State.groups.length * lineHeight) + (padding * 2);
     
-    // Position: Top Right of the Image
     const x = State.image.width - boxWidth - (20 / scale);
     const y = 20 / scale;
 
-    // Legend Background
-    ctx.fillStyle = `rgba(255, 255, 255, ${State.opacity + 0.5})`; // Slightly more opaque than fills
+    ctx.fillStyle = `rgba(255, 255, 255, ${State.opacity + 0.5})`;
     ctx.fillRect(x, y, boxWidth, boxHeight);
     ctx.strokeStyle = "#999";
     ctx.lineWidth = 1 / scale;
     ctx.strokeRect(x, y, boxWidth, boxHeight);
 
-    // Items
     ctx.font = `${fontSize}px sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
     State.groups.forEach((g, i) => {
         const rowY = y + padding + (i * lineHeight) + (lineHeight/2) - (padding/2);
-        
-        // Color Box
         const boxSize = 14 / scale;
         
-        if (State.patternMode) {
-            ctx.fillStyle = createPattern(g.color, i);
-        } else {
-            ctx.fillStyle = g.color;
-        }
+        if (State.patternMode && g.type === 'poly') ctx.fillStyle = createPattern(g.color, i);
+        else ctx.fillStyle = g.color;
         
         ctx.fillRect(x + padding, rowY - boxSize/2, boxSize, boxSize);
         ctx.strokeRect(x + padding, rowY - boxSize/2, boxSize, boxSize);
 
-        // Text
         ctx.fillStyle = "#000";
         ctx.fillText(g.label, x + padding + boxSize + (8/scale), rowY);
     });
@@ -995,6 +1102,59 @@ function drawLegend(ctx, isExport) {
  * HELPERS
  * --------------------------------------------------------------------------
  */
+function hitTestLabel(pt) {
+    // Simple hit test for labels in Hand mode
+    const scale = State.scale;
+    const h = 24 / scale;
+    
+    for (let group of State.groups) {
+        // Re-calculate label position logic to find hit box
+        let x, y;
+        if (group.labelPos) {
+            x = group.labelPos.x; y = group.labelPos.y;
+        } else {
+            let path = group.paths[0];
+            if (group.type === 'poly') {
+                const c = getCentroid(path);
+                x = c.x; y = c.y;
+                // Check auto-offset logic
+                ctx.font = `bold ${14 / scale}px sans-serif`;
+                const w = ctx.measureText(group.label).width + 12/scale;
+                const bounds = getBounds(path);
+                if ((bounds.maxX - bounds.minX) < w || (bounds.maxY - bounds.minY) < h) {
+                    x = bounds.maxX + w/2 + 10/scale;
+                    y = bounds.minY - 10/scale;
+                }
+            } else {
+                const mid = Math.floor(path.length / 2);
+                x = path[mid].x; y = path[mid].y;
+            }
+        }
+        
+        // Approx width
+        const w = (group.label.length * 8 + 20) / scale; 
+        if (pt.x >= x - w/2 && pt.x <= x + w/2 && pt.y >= y - h/2 && pt.y <= y + h/2) {
+            return group;
+        }
+    }
+    return null;
+}
+
+function smoothPoints(points) {
+    if (points.length < 3) return points;
+    // Chaikin's Algorithm for smoothing
+    let smoothed = [];
+    smoothed.push(points[0]);
+    for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i];
+        const p1 = points[i+1];
+        smoothed.push({ x: 0.75 * p0.x + 0.25 * p1.x, y: 0.75 * p0.y + 0.25 * p1.y });
+        smoothed.push({ x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y });
+    }
+    smoothed.push(points[points.length - 1]);
+    return smoothed;
+}
+
 function getWorldPoint(e) {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -1022,7 +1182,6 @@ function updateHoverState(pt) {
 
     const hitDist = Config.hitRadius / State.scale;
 
-    // Check Vertices
     for (let i = 0; i < group.paths.length; i++) {
         const path = group.paths[i];
         for (let j = 0; j < path.length; j++) {
@@ -1035,18 +1194,20 @@ function updateHoverState(pt) {
         }
     }
 
-    // Check Edges
-    for (let i = 0; i < group.paths.length; i++) {
-        const path = group.paths[i];
-        for (let j = 0; j < path.length; j++) {
-            const p1 = path[j];
-            const p2 = path[(j + 1) % path.length];
-            const dist = distToSegment(pt, p1, p2);
-            if (dist < hitDist) {
-                State.hoveredEdge = { groupId: State.groups.indexOf(group), pathIdx: i, ptIdx: j };
-                container.style.cursor = 'copy';
-                render();
-                return;
+    // Edges (Poly only)
+    if (group.type === 'poly') {
+        for (let i = 0; i < group.paths.length; i++) {
+            const path = group.paths[i];
+            for (let j = 0; j < path.length; j++) {
+                const p1 = path[j];
+                const p2 = path[(j + 1) % path.length];
+                const dist = distToSegment(pt, p1, p2);
+                if (dist < hitDist) {
+                    State.hoveredEdge = { groupId: State.groups.indexOf(group), pathIdx: i, ptIdx: j };
+                    container.style.cursor = 'copy';
+                    render();
+                    return;
+                }
             }
         }
     }
@@ -1067,7 +1228,14 @@ function findGroupHit(pt) {
     for (let i = State.groups.length - 1; i >= 0; i--) {
         const group = State.groups[i];
         for (let path of group.paths) {
-            if (pointInPoly(pt, path)) return group;
+            if (group.type === 'poly') {
+                if (pointInPoly(pt, path)) return group;
+            } else {
+                // Arrow hit test (distance to line)
+                for(let j=0; j<path.length-1; j++) {
+                    if(distToSegment(pt, path[j], path[j+1]) < 5/State.scale) return group;
+                }
+            }
         }
     }
     return null;
@@ -1088,6 +1256,15 @@ function getCentroid(path) {
     let x = 0, y = 0;
     path.forEach(p => { x += p.x; y += p.y; });
     return { x: x / path.length, y: y / path.length };
+}
+
+function getBounds(path) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    path.forEach(p => {
+        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+    });
+    return { minX, minY, maxX, maxY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
 }
 
 function simplifyPath(points, epsilon) {
@@ -1133,14 +1310,16 @@ function loadFile(file) {
 function exportJSON() {
     if (!State.image) return;
     const data = {
-        version: "3.5",
+        version: "4.0",
         image: State.image.src.substring(0, 50) + "...",
         width: State.image.width,
         height: State.image.height,
         annotations: State.groups.map(g => ({
             label: g.label,
             color: g.color,
-            polygons: g.paths
+            type: g.type,
+            points: g.paths,
+            labelPos: g.labelPos
         }))
     };
     const jsonBlob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
@@ -1153,16 +1332,11 @@ function exportJSON() {
 
 function exportImage() {
     if (!State.image) return;
-    
-    // Create temp canvas at full image resolution
     const tCanvas = document.createElement('canvas');
     tCanvas.width = State.image.width;
     tCanvas.height = State.image.height;
     const tCtx = tCanvas.getContext('2d');
-    
-    // Render clean version (isExport = true)
     render(tCtx, true);
-    
     const link = document.createElement('a');
     link.download = 'annotated_image.png';
     link.href = tCanvas.toDataURL('image/png');
@@ -1182,7 +1356,7 @@ function updateLayerUI() {
         el.innerHTML = `
             <div class="layer-dot" style="background:${g.color}"></div>
             <div class="layer-name">${g.label}</div>
-            <div style="font-size:0.7rem; color:var(--text-muted)">${g.paths.length}</div>
+            <div style="font-size:0.7rem; color:var(--text-muted)">${g.type === 'arrow' ? '↗' : '⬠'}</div>
         `;
         el.onclick = () => {
             State.selectedGroupId = g.id;
