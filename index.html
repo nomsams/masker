@@ -1,32 +1,28 @@
 <!-- 
-LASSOMASK STUDIO ULTIMATE v4.0
+LASSOMASK STUDIO ULTIMATE v4.5
 ---------------------------------------------------
 USER INSTRUCTIONS:
 
 1.  **Tools**:
-    -   **Lasso (D)**: Standard area selection.
-    -   **Arrow (A)**: Draws a smoothed line with an arrowhead at the end.
-    -   **Hand (Space)**: Pan the canvas OR Drag Labels to reposition them.
+    -   **Lasso (D)**: Draw masks. Clicking inside existing shapes draws a NEW shape (Nested support).
+    -   **Arrow (A)**: Draw arrows. Direction is calculated using a weighted look-back algorithm for smoothness.
+    -   **Hand (Space)**: Select shapes, Pan canvas, or Drag Labels.
 
 2.  **Drawing Behavior**:
-    -   **Hold to Draw**: Enabled by default. Click & Drag to draw, release to finish. 
-    -   Disable this in settings to use the old "Click-Click" Polyline mode.
+    -   **Hold to Draw**: Default. Click & Drag to draw, release to finish.
+    -   **Nested Areas**: Just draw inside an existing area. To edit the parent area, switch to Hand tool.
 
 3.  **Labels**:
-    -   **Auto-Placement**: Labels inside large areas, outside small areas.
-    -   **Manual Placement**: Use the Hand tool to drag a label anywhere.
+    -   **Smart Positioning**: Labels pop out if the area is too small.
+    -   **Manual**: Use Hand tool to drag labels anywhere.
 
-4.  **Organization**:
-    -   **Siblings**: Right-click -> "Add Sibling" to add parts to a group.
-    -   **Pattern Mode**: Geometric fills for color blindness.
+4.  **Export**:
+    -   **PNG**: Full resolution export with arrows, labels, and patterns.
+    -   **JSON**: Deep learning compatible format.
 
-5.  **Export**:
-    -   **Export Result**: PNG with all arrows, labels, and masks burned in.
-    -   **Export JSON**: Includes arrow paths and label positions.
-
-6.  **Shortcuts**:
-    -   `Ctrl+Z`: Undo
+5.  **Shortcuts**:
     -   `Space`: Toggle Hand Tool
+    -   `Ctrl+Z`: Undo
     -   `[` / `]`: Brush Size
 -->
 
@@ -35,27 +31,27 @@ USER INSTRUCTIONS:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LassoMask Studio Ultimate v4.0</title>
+    <title>LassoMask Studio Ultimate v4.5</title>
     <style>
         /* ------------------------------------------------------------------
            THEME & VARIABLES
            ------------------------------------------------------------------ */
         :root {
-            --bg-app: #f8fafc;
+            --bg-app: #f1f5f9;
             --bg-panel: #ffffff;
             --bg-canvas: #e2e8f0;
             --text-main: #0f172a;
             --text-muted: #64748b;
             --border: #cbd5e1;
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
             --danger: #ef4444;
             
             --header-h: 60px;
             --sidebar-w: 320px;
             --radius: 8px;
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --font: 'Inter', system-ui, sans-serif;
+            --font: 'Inter', system-ui, -apple-system, sans-serif;
         }
 
         [data-theme="dark"] {
@@ -232,7 +228,7 @@ USER INSTRUCTIONS:
     <header>
         <div class="logo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            LassoMask <span>Studio</span> <span class="version-tag">v4.0</span>
+            LassoMask <span>Studio</span> <span class="version-tag">v4.5</span>
         </div>
         <div class="toolbar">
             <button class="btn-icon" id="undo-btn" title="Undo (Ctrl+Z)">↩</button>
@@ -260,7 +256,7 @@ USER INSTRUCTIONS:
                         <button class="btn-icon" id="tool-arrow" title="Arrow (A)">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                         </button>
-                        <button class="btn-icon" id="tool-pan" title="Hand/Move Labels (Space)">
+                        <button class="btn-icon" id="tool-pan" title="Hand/Select (Space)">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v0"/><path d="M14 10V4a2 2 0 00-2-2v0a2 2 0 00-2 2v2"/><path d="M10 10.5V6a2 2 0 00-2-2v0a2 2 0 00-2 2v8"/><path d="M18 8a2 2 0 114 0v6a8 8 0 01-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 012.83-2.82L7 15"/></svg>
                         </button>
                     </div>
@@ -549,6 +545,14 @@ function onMouseDown(e) {
             State.draggingLabel = hitLabel.id;
             container.style.cursor = 'move';
         } else {
+            // Check if hitting a group to select (Hand mode only)
+            const hitGroup = findGroupHit(pt);
+            if (hitGroup) {
+                State.selectedGroupId = hitGroup.id;
+                updateLayerUI();
+                render();
+            }
+            
             State.isPanning = true;
             State.lastMouse = { x: e.clientX, y: e.clientY };
             container.style.cursor = 'grabbing';
@@ -560,7 +564,7 @@ function onMouseDown(e) {
 
     const pt = getWorldPoint(e);
 
-    // 1. Edit Vertex
+    // 1. Edit Vertex (Only if selected)
     if (State.hoveredVertex) {
         State.draggingVertex = State.hoveredVertex;
         State.selectedGroupId = State.groups[State.hoveredVertex.groupId].id;
@@ -568,7 +572,7 @@ function onMouseDown(e) {
         return;
     }
 
-    // 2. Insert Vertex (Only for Polygons)
+    // 2. Insert Vertex (Only for Polygons, if selected)
     if (State.hoveredEdge && !State.isDrawing) {
         const { groupId, pathIdx, ptIdx } = State.hoveredEdge;
         const group = State.groups[groupId];
@@ -598,17 +602,10 @@ function onMouseDown(e) {
                 }
             }
         } else {
-            // Start New
-            const hitGroup = findGroupHit(pt);
-            if (hitGroup && !State.isDrawing && State.tool === 'draw') {
-                State.selectedGroupId = hitGroup.id;
-                updateLayerUI();
-                render();
-            } else {
-                State.isDrawing = true;
-                State.activePath = [pt];
-                State.isDragging = true;
-            }
+            // Start New Drawing (Ignore selection in Draw mode to allow nested drawing)
+            State.isDrawing = true;
+            State.activePath = [pt];
+            State.isDragging = true;
         }
     }
 }
@@ -677,7 +674,7 @@ function onMouseUp(e) {
         } else {
             // Click mode logic
             if (State.tool === 'arrow') {
-                finishPath(); // Arrows always finish on release in click mode too usually, but let's stick to pattern
+                finishPath(); // Arrows always finish on release in click mode too usually
             } else {
                 // Lasso Click Mode: Auto-close if near start
                 const start = State.activePath[0];
@@ -972,10 +969,26 @@ function drawArrow(ctx, path, color, isSelected, scale) {
     for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
     ctx.stroke();
 
-    // Arrowhead
+    // Arrowhead Calculation (Look-back algorithm)
     const end = path[path.length - 1];
-    const prev = path[path.length - 2];
-    const angle = Math.atan2(end.y - prev.y, end.x - prev.x);
+    let angle = 0;
+    
+    // Find a point ~15px back
+    const lookBackDist = 15 / scale;
+    let dist = 0;
+    let prev = path[path.length - 2];
+    
+    for (let i = path.length - 2; i >= 0; i--) {
+        const p1 = path[i];
+        const p2 = path[i+1];
+        dist += Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        if (dist >= lookBackDist) {
+            prev = p1;
+            break;
+        }
+    }
+    
+    angle = Math.atan2(end.y - prev.y, end.x - prev.x);
     const headLen = 15 / scale;
 
     ctx.beginPath();
@@ -1310,7 +1323,7 @@ function loadFile(file) {
 function exportJSON() {
     if (!State.image) return;
     const data = {
-        version: "4.0",
+        version: "4.5",
         image: State.image.src.substring(0, 50) + "...",
         width: State.image.width,
         height: State.image.height,
