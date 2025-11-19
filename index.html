@@ -1,5 +1,5 @@
 <!-- 
-LASSOMASK STUDIO ULTIMATE v3.0 - VC DEMO BUILD
+LASSOMASK STUDIO ULTIMATE v3.5 - VC DEMO BUILD
 ---------------------------------------------------
 USER INSTRUCTIONS:
 
@@ -11,18 +11,17 @@ USER INSTRUCTIONS:
     -   **Freehand**: Click and Drag.
     -   **Polyline**: Click, move, click again.
     -   **Close Loop**: Click the Green Start Point or Double Click.
-    -   **Auto-Color**: New areas get distinct colors automatically.
 
-3.  **Organization**:
-    -   **Siblings**: Right-click an area -> "Add Sibling" to add disconnected parts to the same group (same color/label).
-    -   **Color Blind Mode**: Toggle in the sidebar for high-contrast palette.
+3.  **Accessibility & Visualization**:
+    -   **Pattern Mode**: Toggle "Pattern Fill" to use geometric textures (stripes, dots) instead of just solid colors. Ideal for color blindness.
+    -   **Legend Mode**: Switch Label Style to "Legend Box" to see a MATLAB-style list in the corner.
 
-4.  **Labels**:
-    -   **Inside**: Centered on the object.
-    -   **Margin**: Aligned to the right edge of the image with leader lines (MATLAB style).
+4.  **Organization**:
+    -   **Siblings**: Right-click an area -> "Add Sibling" to add disconnected parts to the same group.
+    -   **Auto-Color**: Colors cycle automatically.
 
 5.  **Export**:
-    -   **Export Result**: Downloads the full resolution image with masks and labels burned in (no UI overlays).
+    -   **Export Result**: Downloads full-res PNG with masks, patterns, and legend burned in.
     -   **Export JSON**: Data for ML training.
 
 6.  **Shortcuts**:
@@ -36,7 +35,7 @@ USER INSTRUCTIONS:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LassoMask Studio Ultimate v3.0</title>
+    <title>LassoMask Studio Ultimate v3.5</title>
     <style>
         /* ------------------------------------------------------------------
            THEME & VARIABLES
@@ -233,7 +232,7 @@ USER INSTRUCTIONS:
     <header>
         <div class="logo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            LassoMask <span>Studio</span> <span class="version-tag">v3.0</span>
+            LassoMask <span>Studio</span> <span class="version-tag">v3.5</span>
         </div>
         <div class="toolbar">
             <button class="btn-icon" id="undo-btn" title="Undo (Ctrl+Z)">↩</button>
@@ -260,9 +259,9 @@ USER INSTRUCTIONS:
                     </div>
                 </div>
                 <div class="control-row">
-                    <label>Color Blind Mode</label>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="cvd-toggle">
+                    <label>Pattern Fill (CVD)</label>
+                    <label class="toggle-switch" title="Use patterns for color blindness">
+                        <input type="checkbox" id="pattern-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -281,8 +280,8 @@ USER INSTRUCTIONS:
                 <div class="control-row">
                     <label>Label Style</label>
                     <select id="label-mode">
-                        <option value="inside">Inside (Center)</option>
-                        <option value="margin">Margin (MATLAB)</option>
+                        <option value="inside">Inside (Transparent)</option>
+                        <option value="legend">Legend Box (MATLAB)</option>
                     </select>
                 </div>
             </div>
@@ -352,16 +351,10 @@ const Config = {
     simplifyEpsilon: 1.5
 };
 
-// Distinct colors for standard mode
-const PALETTE_STD = [
+// High contrast palette
+const PALETTE = [
     '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', 
     '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'
-];
-
-// Okabe-Ito Palette for CVD (Color Vision Deficiency)
-const PALETTE_CVD = [
-    '#E69F00', '#56B4E9', '#009E73', '#F0E442', 
-    '#0072B2', '#D55E00', '#CC79A7', '#000000'
 ];
 
 const State = {
@@ -395,11 +388,11 @@ const State = {
     historyIdx: -1,
 
     // Settings
-    color: PALETTE_STD[0],
+    color: PALETTE[0],
     strokeWidth: 2,
-    opacity: 0.25, // More transparent by default
+    opacity: 0.25, 
     labelMode: 'inside',
-    colorBlindMode: false
+    patternMode: false
 };
 
 // DOM Elements
@@ -415,6 +408,9 @@ const ui = {
     emptyState: document.getElementById('empty-state'),
     colorPicker: document.getElementById('color-picker')
 };
+
+// Pattern Cache
+const patternCache = {};
 
 /**
  * --------------------------------------------------------------------------
@@ -457,9 +453,8 @@ function init() {
     document.getElementById('stroke-slider').addEventListener('input', e => { State.strokeWidth = parseInt(e.target.value); render(); });
     document.getElementById('opacity-slider').addEventListener('input', e => { State.opacity = parseFloat(e.target.value); render(); });
     document.getElementById('label-mode').addEventListener('change', e => { State.labelMode = e.target.value; render(); });
-    document.getElementById('cvd-toggle').addEventListener('change', e => { 
-        State.colorBlindMode = e.target.checked; 
-        refreshColors();
+    document.getElementById('pattern-toggle').addEventListener('change', e => { 
+        State.patternMode = e.target.checked; 
         render(); 
     });
 
@@ -484,6 +479,55 @@ function init() {
     if(window.matchMedia('(prefers-color-scheme: dark)').matches) toggleTheme();
     
     renderLoop();
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * PATTERN GENERATION (CVD Support)
+ * --------------------------------------------------------------------------
+ */
+function createPattern(color, index) {
+    const key = color + index;
+    if (patternCache[key]) return patternCache[key];
+
+    const pCanvas = document.createElement('canvas');
+    const pCtx = pCanvas.getContext('2d');
+    const size = 20;
+    pCanvas.width = size;
+    pCanvas.height = size;
+
+    // Base transparent background
+    pCtx.fillStyle = hexToRgba(color, 0.1); // Very light background
+    pCtx.fillRect(0, 0, size, size);
+
+    pCtx.strokeStyle = color;
+    pCtx.fillStyle = color;
+    pCtx.lineWidth = 2;
+
+    // 6 Distinct Patterns
+    const type = index % 6;
+    
+    pCtx.beginPath();
+    if (type === 0) { // Forward Slash
+        pCtx.moveTo(0, size); pCtx.lineTo(size, 0);
+    } else if (type === 1) { // Back Slash
+        pCtx.moveTo(0, 0); pCtx.lineTo(size, size);
+    } else if (type === 2) { // Cross
+        pCtx.moveTo(0, size/2); pCtx.lineTo(size, size/2);
+        pCtx.moveTo(size/2, 0); pCtx.lineTo(size/2, size);
+    } else if (type === 3) { // Dots
+        pCtx.arc(size/2, size/2, 3, 0, Math.PI*2);
+        pCtx.fill();
+    } else if (type === 4) { // Horizontal
+        pCtx.moveTo(0, size/2); pCtx.lineTo(size, size/2);
+    } else if (type === 5) { // Vertical
+        pCtx.moveTo(size/2, 0); pCtx.lineTo(size/2, size);
+    }
+    pCtx.stroke();
+
+    const pattern = ctx.createPattern(pCanvas, 'repeat');
+    patternCache[key] = pattern;
+    return pattern;
 }
 
 /**
@@ -527,7 +571,6 @@ function onMouseDown(e) {
     // 3. Drawing
     if (State.tool === 'draw') {
         if (State.isDrawing) {
-            // Check close loop
             const start = State.activePath[0];
             const dist = Math.hypot(pt.x - start.x, pt.y - start.y);
             const screenDist = dist * State.scale;
@@ -539,14 +582,12 @@ function onMouseDown(e) {
                 State.isDragging = true;
             }
         } else {
-            // Check selection
             const hitGroup = findGroupHit(pt);
             if (hitGroup && !State.isDrawing) {
                 State.selectedGroupId = hitGroup.id;
                 updateLayerUI();
                 render();
             } else {
-                // Start new
                 State.isDrawing = true;
                 State.activePath = [pt];
                 State.isDragging = true;
@@ -603,7 +644,6 @@ function onMouseUp(e) {
             State.activePath = simplifyPath(State.activePath, Config.simplifyEpsilon / State.scale);
         }
         
-        // Auto-close on drag release near start
         const start = State.activePath[0];
         const end = State.activePath[State.activePath.length - 1];
         const dist = Math.hypot(end.x - start.x, end.y - start.y) * State.scale;
@@ -697,8 +737,7 @@ function commitLabel() {
     const label = ui.labelText.value.trim() || "Untitled";
     
     // Auto-pick color
-    const palette = State.colorBlindMode ? PALETTE_CVD : PALETTE_STD;
-    const nextColor = palette[State.groups.length % palette.length];
+    const nextColor = PALETTE[State.groups.length % PALETTE.length];
     State.color = nextColor;
     ui.colorPicker.value = nextColor;
 
@@ -762,14 +801,6 @@ function deleteVertex() {
     }
 }
 
-function refreshColors() {
-    const palette = State.colorBlindMode ? PALETTE_CVD : PALETTE_STD;
-    State.groups.forEach((g, i) => {
-        g.color = palette[i % palette.length];
-    });
-    updateLayerUI();
-}
-
 /**
  * --------------------------------------------------------------------------
  * RENDERING
@@ -798,9 +829,18 @@ function render(targetCtx = ctx, isExport = false) {
     }
 
     // 2. Draw Groups
-    State.groups.forEach(group => {
+    State.groups.forEach((group, index) => {
         const isSelected = !isExport && group.id === State.selectedGroupId;
-        targetCtx.fillStyle = hexToRgba(group.color, State.opacity);
+        
+        // Determine Fill Style (Solid or Pattern)
+        let fillStyle;
+        if (State.patternMode) {
+            fillStyle = createPattern(group.color, index);
+        } else {
+            fillStyle = hexToRgba(group.color, State.opacity);
+        }
+
+        targetCtx.fillStyle = fillStyle;
         targetCtx.strokeStyle = isSelected ? '#fff' : group.color;
         targetCtx.lineWidth = (State.strokeWidth) / (isExport ? 1 : State.scale);
 
@@ -830,11 +870,18 @@ function render(targetCtx = ctx, isExport = false) {
             }
         });
 
-        // Labels
-        if (group.paths.length > 0) drawLabel(targetCtx, group, isExport);
+        // Labels (Inside Mode)
+        if (State.labelMode === 'inside' && group.paths.length > 0) {
+            drawInsideLabel(targetCtx, group, isExport);
+        }
     });
 
-    // 3. Active Path (Screen only)
+    // 3. Legend (MATLAB Mode)
+    if (State.labelMode === 'legend' && State.groups.length > 0) {
+        drawLegend(targetCtx, isExport);
+    }
+
+    // 4. Active Path (Screen only)
     if (!isExport && State.activePath.length > 0) {
         targetCtx.beginPath();
         targetCtx.moveTo(State.activePath[0].x, State.activePath[0].y);
@@ -852,7 +899,7 @@ function render(targetCtx = ctx, isExport = false) {
         targetCtx.fill();
     }
 
-    // 4. Hover (Screen only)
+    // 5. Hover (Screen only)
     if (!isExport && State.hoveredVertex) {
         const { groupId, pathIdx, ptIdx } = State.hoveredVertex;
         const pt = State.groups[groupId].paths[pathIdx][ptIdx];
@@ -863,10 +910,9 @@ function render(targetCtx = ctx, isExport = false) {
     }
 }
 
-function drawLabel(ctx, group, isExport) {
+function drawInsideLabel(ctx, group, isExport) {
     let path = group.paths.reduce((a, b) => a.length > b.length ? a : b);
     const center = getCentroid(path);
-    const bounds = getBounds(path);
     const scale = isExport ? 1 : State.scale;
     
     ctx.font = `bold ${14 / scale}px sans-serif`;
@@ -876,45 +922,16 @@ function drawLabel(ctx, group, isExport) {
     const w = metrics.width + (padding * 2);
     const h = 24 / scale;
     
-    let x, y;
-    
-    if (State.labelMode === 'inside') {
-        x = center.x; 
-        y = center.y;
-    } else {
-        // MATLAB Style: Right margin INSIDE image
-        const margin = 10 / scale;
-        x = State.image.width - (w/2) - margin;
-        y = bounds.cy;
-        
-        // Clamp Y to stay inside image
-        y = Math.max(h, Math.min(State.image.height - h, y));
+    const x = center.x;
+    const y = center.y;
 
-        // Leader line
-        ctx.beginPath();
-        ctx.moveTo(bounds.maxX, bounds.cy);
-        ctx.lineTo(x - w/2, y);
-        ctx.strokeStyle = group.color;
-        ctx.lineWidth = 1.5 / scale;
-        ctx.stroke();
-        
-        // Dot at object edge
-        ctx.beginPath();
-        ctx.arc(bounds.maxX, bounds.cy, 3/scale, 0, Math.PI*2);
-        ctx.fillStyle = group.color;
-        ctx.fill();
-    }
-
-    // Label Box
-    ctx.shadowColor = "rgba(0,0,0,0.3)";
-    ctx.shadowBlur = 4;
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    // Transparent Background Box
+    ctx.fillStyle = "rgba(255, 255, 255, 0.6)"; // Semi-transparent
     ctx.fillRect(x - w/2, y - h/2, w, h);
-    ctx.shadowBlur = 0;
 
     // Border
     ctx.strokeStyle = group.color;
-    ctx.lineWidth = 2 / scale;
+    ctx.lineWidth = 1.5 / scale;
     ctx.strokeRect(x - w/2, y - h/2, w, h);
 
     // Text
@@ -922,6 +939,55 @@ function drawLabel(ctx, group, isExport) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y);
+}
+
+function drawLegend(ctx, isExport) {
+    // Reset transform to draw in screen coordinates (or image coordinates for export)
+    // For export, we draw relative to image size. For screen, relative to viewport?
+    // Actually, for export consistency, let's draw it in "World Space" but fixed to the top-right corner of the image.
+    
+    const scale = isExport ? 1 : State.scale;
+    const fontSize = 14 / scale;
+    const padding = 10 / scale;
+    const lineHeight = 24 / scale;
+    const boxWidth = 150 / scale; // Approximate
+    const boxHeight = (State.groups.length * lineHeight) + (padding * 2);
+    
+    // Position: Top Right of the Image
+    const x = State.image.width - boxWidth - (20 / scale);
+    const y = 20 / scale;
+
+    // Legend Background
+    ctx.fillStyle = `rgba(255, 255, 255, ${State.opacity + 0.5})`; // Slightly more opaque than fills
+    ctx.fillRect(x, y, boxWidth, boxHeight);
+    ctx.strokeStyle = "#999";
+    ctx.lineWidth = 1 / scale;
+    ctx.strokeRect(x, y, boxWidth, boxHeight);
+
+    // Items
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    State.groups.forEach((g, i) => {
+        const rowY = y + padding + (i * lineHeight) + (lineHeight/2) - (padding/2);
+        
+        // Color Box
+        const boxSize = 14 / scale;
+        
+        if (State.patternMode) {
+            ctx.fillStyle = createPattern(g.color, i);
+        } else {
+            ctx.fillStyle = g.color;
+        }
+        
+        ctx.fillRect(x + padding, rowY - boxSize/2, boxSize, boxSize);
+        ctx.strokeRect(x + padding, rowY - boxSize/2, boxSize, boxSize);
+
+        // Text
+        ctx.fillStyle = "#000";
+        ctx.fillText(g.label, x + padding + boxSize + (8/scale), rowY);
+    });
 }
 
 /**
@@ -1024,15 +1090,6 @@ function getCentroid(path) {
     return { x: x / path.length, y: y / path.length };
 }
 
-function getBounds(path) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    path.forEach(p => {
-        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-    });
-    return { minX, minY, maxX, maxY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
-}
-
 function simplifyPath(points, epsilon) {
     if (points.length <= 2) return points;
     let dmax = 0, index = 0;
@@ -1076,7 +1133,7 @@ function loadFile(file) {
 function exportJSON() {
     if (!State.image) return;
     const data = {
-        version: "3.0",
+        version: "3.5",
         image: State.image.src.substring(0, 50) + "...",
         width: State.image.width,
         height: State.image.height,
