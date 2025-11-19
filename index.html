@@ -1,38 +1,34 @@
 <!-- 
-LASSOMASK STUDIO ULTIMATE v2.5 - SINGLE FILE WEBAPP
+LASSOMASK STUDIO ULTIMATE v3.0 - VC DEMO BUILD
 ---------------------------------------------------
-USER INSTRUCTIONS & DOCUMENTATION:
+USER INSTRUCTIONS:
 
 1.  **Navigation**:
     -   **Zoom**: Mouse Wheel or UI Buttons.
     -   **Pan**: Hold SPACE + Drag, or Middle Mouse Button.
 
-2.  **Drawing (Lasso Tool)**:
+2.  **Drawing**:
     -   **Freehand**: Click and Drag.
-    -   **Polyline**: Click, move, click again (straight lines).
-    -   **Hybrid**: You can mix dragging and clicking in the same shape.
-    -   **Close Loop**: Click the "Start Point" (highlighted in green) or Double Click.
-    -   **Edge Clamping**: Cursor stays within image bounds.
+    -   **Polyline**: Click, move, click again.
+    -   **Close Loop**: Click the Green Start Point or Double Click.
+    -   **Auto-Color**: New areas get distinct colors automatically.
 
 3.  **Organization**:
-    -   **Groups**: Create a named object (e.g., "Car").
-    -   **Siblings**: To add a second disconnected area to "Car", select "Car" in the list, Right-Click canvas -> "Add Sibling Area".
+    -   **Siblings**: Right-click an area -> "Add Sibling" to add disconnected parts to the same group (same color/label).
+    -   **Color Blind Mode**: Toggle in the sidebar for high-contrast palette.
 
-4.  **Editing**:
-    -   **Select**: Click any area to select its group.
-    -   **Move Point**: Drag any white vertex.
-    -   **Add Point**: Click anywhere on the outline of a selected shape.
-    -   **Delete Point**: Right-Click on a vertex.
+4.  **Labels**:
+    -   **Inside**: Centered on the object.
+    -   **Margin**: Aligned to the right edge of the image with leader lines (MATLAB style).
 
 5.  **Export**:
-    -   **Mask Image**: PNG with transparent background.
-    -   **JSON Data**: Coordinates and labels for ML training.
+    -   **Export Result**: Downloads the full resolution image with masks and labels burned in (no UI overlays).
+    -   **Export JSON**: Data for ML training.
 
 6.  **Shortcuts**:
-    -   `Ctrl+Z` / `Ctrl+Y`: Undo / Redo
-    -   `Space`: Hold to Pan
-    -   `[` / `]`: Decrease/Increase Stroke Width
-    -   `Delete`: Delete selected group
+    -   `Ctrl+Z`: Undo
+    -   `Space`: Pan
+    -   `[` / `]`: Brush Size
 -->
 
 <!DOCTYPE html>
@@ -40,40 +36,38 @@ USER INSTRUCTIONS & DOCUMENTATION:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LassoMask Studio Ultimate - VC Demo Build</title>
+    <title>LassoMask Studio Ultimate v3.0</title>
     <style>
         /* ------------------------------------------------------------------
            THEME & VARIABLES
            ------------------------------------------------------------------ */
         :root {
-            --bg-app: #f3f4f6;
+            --bg-app: #f8fafc;
             --bg-panel: #ffffff;
-            --bg-canvas: #e5e7eb;
-            --text-main: #111827;
-            --text-muted: #6b7280;
-            --border: #e5e7eb;
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
+            --bg-canvas: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
             --danger: #ef4444;
-            --success: #10b981;
-            --accent: #8b5cf6;
             
             --header-h: 60px;
-            --sidebar-w: 300px;
-            --radius: 6px;
+            --sidebar-w: 320px;
+            --radius: 8px;
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --font: 'Segoe UI', system-ui, sans-serif;
+            --font: 'Inter', system-ui, sans-serif;
         }
 
         [data-theme="dark"] {
             --bg-app: #0f172a;
             --bg-panel: #1e293b;
             --bg-canvas: #020617;
-            --text-main: #f3f4f6;
+            --text-main: #f1f5f9;
             --text-muted: #94a3b8;
             --border: #334155;
-            --primary: #3b82f6;
-            --primary-hover: #60a5fa;
+            --primary: #60a5fa;
+            --primary-hover: #3b82f6;
         }
 
         * { box-sizing: border-box; outline: none; user-select: none; }
@@ -92,7 +86,6 @@ USER INSTRUCTIONS & DOCUMENTATION:
         /* ------------------------------------------------------------------
            UI COMPONENTS
            ------------------------------------------------------------------ */
-        /* Header */
         header {
             height: var(--header-h);
             background: var(--bg-panel);
@@ -105,15 +98,14 @@ USER INSTRUCTIONS & DOCUMENTATION:
             box-shadow: var(--shadow);
         }
 
-        .logo { font-weight: 800; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
+        .logo { font-weight: 800; font-size: 1.25rem; display: flex; align-items: center; gap: 10px; letter-spacing: -0.025em; }
         .logo span { color: var(--primary); }
-        .version-tag { font-size: 0.7rem; background: var(--bg-app); padding: 2px 6px; border-radius: 4px; color: var(--text-muted); border: 1px solid var(--border); }
+        .version-tag { font-size: 0.7rem; background: var(--bg-app); padding: 2px 8px; border-radius: 12px; color: var(--text-muted); border: 1px solid var(--border); font-weight: 600; }
 
         .toolbar { display: flex; gap: 8px; align-items: center; }
 
-        /* Buttons */
         .btn {
-            padding: 8px 14px;
+            padding: 8px 16px;
             border-radius: var(--radius);
             border: 1px solid transparent;
             font-size: 0.85rem;
@@ -121,18 +113,17 @@ USER INSTRUCTIONS & DOCUMENTATION:
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             transition: all 0.2s;
         }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
         .btn-sec { background: transparent; border-color: var(--border); color: var(--text-main); }
         .btn-sec:hover { background: var(--bg-app); }
-        .btn-icon { padding: 8px; border-radius: 50%; color: var(--text-muted); background: transparent; border: none; }
+        .btn-icon { padding: 8px; border-radius: 50%; color: var(--text-muted); background: transparent; border: none; cursor: pointer; }
         .btn-icon:hover { background: var(--bg-app); color: var(--text-main); }
         .btn-icon.active { background: var(--primary); color: white; }
 
-        /* Sidebar */
         aside {
             width: var(--sidebar-w);
             background: var(--bg-panel);
@@ -142,35 +133,41 @@ USER INSTRUCTIONS & DOCUMENTATION:
             z-index: 10;
         }
 
-        .panel-section { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .panel-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 0.8rem; letter-spacing: 0.05em; }
+        .panel-section { padding: 1.25rem; border-bottom: 1px solid var(--border); }
+        .panel-title { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 1rem; letter-spacing: 0.05em; }
 
-        .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+        .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
         .control-row label { font-size: 0.85rem; font-weight: 500; }
         
-        input[type="range"] { width: 100px; accent-color: var(--primary); }
-        input[type="color"] { border: none; width: 30px; height: 30px; cursor: pointer; background: none; }
-        select { background: var(--bg-app); border: 1px solid var(--border); color: var(--text-main); padding: 4px; border-radius: 4px; }
+        input[type="range"] { width: 120px; accent-color: var(--primary); }
+        input[type="color"] { border: none; width: 32px; height: 32px; cursor: pointer; background: none; border-radius: 4px; }
+        select { background: var(--bg-app); border: 1px solid var(--border); color: var(--text-main); padding: 6px; border-radius: 6px; font-size: 0.85rem; }
 
-        /* Layer List */
+        /* Toggle Switch */
+        .toggle-switch { position: relative; width: 40px; height: 22px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; inset: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(18px); }
+
         .layer-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
         .layer-item {
             display: flex;
             align-items: center;
-            padding: 8px 12px;
+            padding: 10px;
             background: var(--bg-app);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             cursor: pointer;
             transition: 0.2s;
         }
         .layer-item:hover { border-color: var(--primary); }
-        .layer-item.selected { background: rgba(37, 99, 235, 0.1); border-color: var(--primary); }
-        .layer-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; border: 1px solid rgba(0,0,0,0.2); }
-        .layer-name { flex: 1; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .layer-item.selected { background: rgba(59, 130, 246, 0.08); border-color: var(--primary); }
+        .layer-dot { width: 14px; height: 14px; border-radius: 4px; margin-right: 12px; border: 1px solid rgba(0,0,0,0.1); }
+        .layer-name { flex: 1; font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Workspace */
         main { flex: 1; position: relative; background: var(--bg-canvas); overflow: hidden; display: flex; }
         
         #canvas-container {
@@ -178,7 +175,6 @@ USER INSTRUCTIONS & DOCUMENTATION:
             position: relative;
             overflow: hidden;
             cursor: crosshair;
-            /* Checkerboard */
             background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
@@ -186,7 +182,6 @@ USER INSTRUCTIONS & DOCUMENTATION:
 
         canvas { display: block; transform-origin: 0 0; }
 
-        /* Overlays */
         .overlay-msg {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             text-align: center; color: var(--text-muted); pointer-events: none;
@@ -214,7 +209,6 @@ USER INSTRUCTIONS & DOCUMENTATION:
         .ctx-btn:hover { background: var(--bg-app); }
         .ctx-btn.danger { color: var(--danger); }
 
-        /* Zoom Controls */
         .zoom-controls {
             position: absolute; bottom: 20px; right: 20px;
             background: var(--bg-panel); border: 1px solid var(--border);
@@ -224,7 +218,6 @@ USER INSTRUCTIONS & DOCUMENTATION:
         .zoom-btn { padding: 8px 12px; background: transparent; border: none; cursor: pointer; color: var(--text-main); }
         .zoom-btn:hover { background: var(--bg-app); }
 
-        /* Status Bar */
         .status-bar {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.8); color: white; padding: 6px 16px;
@@ -240,14 +233,18 @@ USER INSTRUCTIONS & DOCUMENTATION:
     <header>
         <div class="logo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            LassoMask <span>Studio</span> <span class="version-tag">v2.5</span>
+            LassoMask <span>Studio</span> <span class="version-tag">v3.0</span>
         </div>
         <div class="toolbar">
             <button class="btn-icon" id="undo-btn" title="Undo (Ctrl+Z)">↩</button>
             <button class="btn-icon" id="redo-btn" title="Redo (Ctrl+Y)">↪</button>
             <div style="width:1px; height:20px; background:var(--border); margin:0 8px;"></div>
             <button class="btn btn-sec" id="theme-btn">🌙</button>
-            <button class="btn btn-primary" id="export-btn">Export Data</button>
+            <button class="btn btn-primary" id="export-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Result
+            </button>
+            <button class="btn btn-sec" id="export-json-btn">JSON</button>
         </div>
     </header>
 
@@ -263,21 +260,28 @@ USER INSTRUCTIONS & DOCUMENTATION:
                     </div>
                 </div>
                 <div class="control-row">
-                    <label>Color</label>
-                    <input type="color" id="color-picker" value="#2563eb">
+                    <label>Color Blind Mode</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cvd-toggle">
+                        <span class="slider"></span>
+                    </label>
                 </div>
                 <div class="control-row">
-                    <label>Stroke</label>
+                    <label>Active Color</label>
+                    <input type="color" id="color-picker" value="#3b82f6">
+                </div>
+                <div class="control-row">
+                    <label>Stroke Width</label>
                     <input type="range" id="stroke-slider" min="1" max="10" value="2">
                 </div>
                 <div class="control-row">
                     <label>Opacity</label>
-                    <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.4">
+                    <input type="range" id="opacity-slider" min="0" max="1" step="0.05" value="0.25">
                 </div>
                 <div class="control-row">
-                    <label>Labels</label>
+                    <label>Label Style</label>
                     <select id="label-mode">
-                        <option value="inside">Inside</option>
+                        <option value="inside">Inside (Center)</option>
                         <option value="margin">Margin (MATLAB)</option>
                     </select>
                 </div>
@@ -317,7 +321,7 @@ USER INSTRUCTIONS & DOCUMENTATION:
 
             <!-- Floating Elements -->
             <div id="floating-input">
-                <input type="text" id="label-text" placeholder="Label Name..." style="border:none; outline:none; background:transparent; color:var(--text-main);">
+                <input type="text" id="label-text" placeholder="Label Name..." style="border:none; outline:none; background:transparent; color:var(--text-main); font-weight:600;">
                 <div style="font-size:0.7rem; color:var(--text-muted); text-align:right; margin-top:4px;">Enter to Save</div>
             </div>
 
@@ -335,22 +339,34 @@ USER INSTRUCTIONS & DOCUMENTATION:
 <script>
 /**
  * --------------------------------------------------------------------------
- * CORE CONFIGURATION & STATE
+ * CONFIGURATION & PALETTES
  * --------------------------------------------------------------------------
  */
 const Config = {
-    snapDist: 15,       // Pixels to snap to start point
-    vertexRadius: 5,    // Radius of edit handles
-    hitRadius: 8,       // Mouse detection radius
+    snapDist: 15,
+    vertexRadius: 5,
+    hitRadius: 8,
     zoomStep: 0.15,
     minZoom: 0.1,
     maxZoom: 10,
-    simplifyEpsilon: 1.5 // For path smoothing
+    simplifyEpsilon: 1.5
 };
+
+// Distinct colors for standard mode
+const PALETTE_STD = [
+    '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', 
+    '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'
+];
+
+// Okabe-Ito Palette for CVD (Color Vision Deficiency)
+const PALETTE_CVD = [
+    '#E69F00', '#56B4E9', '#009E73', '#F0E442', 
+    '#0072B2', '#D55E00', '#CC79A7', '#000000'
+];
 
 const State = {
     image: null,
-    groups: [],         // { id, label, color, paths: [[{x,y}]] }
+    groups: [], // { id, label, color, paths: [[{x,y}]] }
     
     // Viewport
     scale: 1,
@@ -358,19 +374,20 @@ const State = {
     panY: 0,
     
     // Interaction
-    tool: 'draw',       // 'draw' | 'pan'
+    tool: 'draw',
     isDragging: false,
     isPanning: false,
     lastMouse: { x: 0, y: 0 },
     
     // Drawing
-    activePath: [],     // Points currently being drawn
-    isDrawing: false,   // True if currently adding points
+    activePath: [],
+    isDrawing: false,
+    addingSiblingTo: null,
     
     // Selection / Editing
     selectedGroupId: null,
-    hoveredVertex: null, // { groupId, pathIdx, ptIdx }
-    hoveredEdge: null,   // { groupId, pathIdx, ptIdx } (insert point)
+    hoveredVertex: null,
+    hoveredEdge: null,
     draggingVertex: null,
     
     // History
@@ -378,10 +395,11 @@ const State = {
     historyIdx: -1,
 
     // Settings
-    color: '#2563eb',
+    color: PALETTE_STD[0],
     strokeWidth: 2,
-    opacity: 0.4,
-    labelMode: 'inside'
+    opacity: 0.25, // More transparent by default
+    labelMode: 'inside',
+    colorBlindMode: false
 };
 
 // DOM Elements
@@ -394,19 +412,20 @@ const ui = {
     labelText: document.getElementById('label-text'),
     ctxMenu: document.getElementById('context-menu'),
     statusBar: document.getElementById('status-bar'),
-    emptyState: document.getElementById('empty-state')
+    emptyState: document.getElementById('empty-state'),
+    colorPicker: document.getElementById('color-picker')
 };
 
 /**
  * --------------------------------------------------------------------------
- * INITIALIZATION & EVENTS
+ * INITIALIZATION
  * --------------------------------------------------------------------------
  */
 function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
-    // Mouse / Touch Events
+    // Mouse / Touch
     canvas.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -422,7 +441,8 @@ function init() {
     document.getElementById('theme-btn').addEventListener('click', toggleTheme);
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
-    document.getElementById('export-btn').addEventListener('click', exportData);
+    document.getElementById('export-btn').addEventListener('click', exportImage);
+    document.getElementById('export-json-btn').addEventListener('click', exportJSON);
     document.getElementById('clear-all').addEventListener('click', clearAll);
     
     document.getElementById('tool-draw').addEventListener('click', () => setTool('draw'));
@@ -432,13 +452,18 @@ function init() {
     document.getElementById('zoom-out').addEventListener('click', () => zoom(-1));
     document.getElementById('zoom-reset').addEventListener('click', resetView);
 
-    // Settings Bindings
-    document.getElementById('color-picker').addEventListener('input', e => State.color = e.target.value);
+    // Settings
+    ui.colorPicker.addEventListener('input', e => State.color = e.target.value);
     document.getElementById('stroke-slider').addEventListener('input', e => { State.strokeWidth = parseInt(e.target.value); render(); });
     document.getElementById('opacity-slider').addEventListener('input', e => { State.opacity = parseFloat(e.target.value); render(); });
     document.getElementById('label-mode').addEventListener('change', e => { State.labelMode = e.target.value; render(); });
+    document.getElementById('cvd-toggle').addEventListener('change', e => { 
+        State.colorBlindMode = e.target.checked; 
+        refreshColors();
+        render(); 
+    });
 
-    // Context Menu Actions
+    // Context Menu
     document.getElementById('ctx-sibling').addEventListener('click', addSibling);
     document.getElementById('ctx-delete-grp').addEventListener('click', deleteSelected);
     document.getElementById('ctx-delete-pt').addEventListener('click', deleteVertex);
@@ -456,7 +481,6 @@ function init() {
         if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
     });
 
-    // Init Theme
     if(window.matchMedia('(prefers-color-scheme: dark)').matches) toggleTheme();
     
     renderLoop();
@@ -464,13 +488,12 @@ function init() {
 
 /**
  * --------------------------------------------------------------------------
- * INPUT HANDLING (The Brain)
+ * INPUT HANDLING
  * --------------------------------------------------------------------------
  */
 function onMouseDown(e) {
     if (!State.image) return;
     
-    // Middle click or Space+Click = Pan
     if (e.button === 1 || (State.tool === 'pan' && e.button === 0)) {
         State.isPanning = true;
         State.lastMouse = { x: e.clientX, y: e.clientY };
@@ -478,11 +501,11 @@ function onMouseDown(e) {
         return;
     }
 
-    if (e.button !== 0) return; // Only Left Click below
+    if (e.button !== 0) return;
 
     const pt = getWorldPoint(e);
 
-    // 1. EDIT MODE: Vertex Dragging
+    // 1. Edit Vertex
     if (State.hoveredVertex) {
         State.draggingVertex = State.hoveredVertex;
         State.selectedGroupId = State.groups[State.hoveredVertex.groupId].id;
@@ -490,11 +513,10 @@ function onMouseDown(e) {
         return;
     }
 
-    // 2. EDIT MODE: Insert Vertex on Edge
+    // 2. Insert Vertex
     if (State.hoveredEdge && !State.isDrawing) {
         const { groupId, pathIdx, ptIdx } = State.hoveredEdge;
         const group = State.groups[groupId];
-        // Insert point
         group.paths[pathIdx].splice(ptIdx + 1, 0, pt);
         State.draggingVertex = { groupId, pathIdx, ptIdx: ptIdx + 1 };
         State.selectedGroupId = group.id;
@@ -502,11 +524,10 @@ function onMouseDown(e) {
         return;
     }
 
-    // 3. DRAWING MODE
+    // 3. Drawing
     if (State.tool === 'draw') {
-        // If we are already drawing (Polyline mode active)
         if (State.isDrawing) {
-            // Check if closing loop
+            // Check close loop
             const start = State.activePath[0];
             const dist = Math.hypot(pt.x - start.x, pt.y - start.y);
             const screenDist = dist * State.scale;
@@ -514,20 +535,18 @@ function onMouseDown(e) {
             if (State.activePath.length > 2 && screenDist < Config.snapDist) {
                 finishPath();
             } else {
-                // Add point (Polyline click)
                 State.activePath.push(pt);
-                State.isDragging = true; // Allow dragging immediately for freehand
+                State.isDragging = true;
             }
         } else {
-            // Start New Path
-            // Check if we clicked an existing group to select it
+            // Check selection
             const hitGroup = findGroupHit(pt);
             if (hitGroup && !State.isDrawing) {
                 State.selectedGroupId = hitGroup.id;
                 updateLayerUI();
                 render();
             } else {
-                // Start drawing new
+                // Start new
                 State.isDrawing = true;
                 State.activePath = [pt];
                 State.isDragging = true;
@@ -540,7 +559,6 @@ function onMouseMove(e) {
     if (!State.image) return;
     const pt = getWorldPoint(e);
 
-    // Panning
     if (State.isPanning) {
         const dx = e.clientX - State.lastMouse.x;
         const dy = e.clientY - State.lastMouse.y;
@@ -551,7 +569,6 @@ function onMouseMove(e) {
         return;
     }
 
-    // Dragging Vertex
     if (State.draggingVertex) {
         const { groupId, pathIdx, ptIdx } = State.draggingVertex;
         State.groups[groupId].paths[pathIdx][ptIdx] = pt;
@@ -559,7 +576,6 @@ function onMouseMove(e) {
         return;
     }
 
-    // Drawing (Freehand)
     if (State.isDrawing && State.isDragging) {
         const last = State.activePath[State.activePath.length - 1];
         if (Math.hypot(pt.x - last.x, pt.y - last.y) > 2 / State.scale) {
@@ -569,7 +585,6 @@ function onMouseMove(e) {
         return;
     }
 
-    // Hover Effects (Cursor & Snapping)
     updateHoverState(pt);
 }
 
@@ -584,12 +599,11 @@ function onMouseUp(e) {
 
     if (State.isDrawing && State.isDragging) {
         State.isDragging = false;
-        // Simplify path slightly on release to reduce noise
         if (State.activePath.length > 10) {
             State.activePath = simplifyPath(State.activePath, Config.simplifyEpsilon / State.scale);
         }
         
-        // Check if we released near start (Auto-close on drag release)
+        // Auto-close on drag release near start
         const start = State.activePath[0];
         const end = State.activePath[State.activePath.length - 1];
         const dist = Math.hypot(end.x - start.x, end.y - start.y) * State.scale;
@@ -597,7 +611,6 @@ function onMouseUp(e) {
         if (State.activePath.length > 2 && dist < Config.snapDist) {
             finishPath();
         }
-        // Else: Stay in "Polyline" mode (State.isDrawing = true)
     }
     render();
 }
@@ -649,12 +662,9 @@ function onKeyUp(e) {
  */
 function finishPath() {
     if (State.activePath.length < 3) return;
-    
-    // Close loop
-    State.activePath.push({ ...State.activePath[0] });
+    State.activePath.push({ ...State.activePath[0] }); // Close loop
     
     if (State.addingSiblingTo) {
-        // Add to existing group
         const group = State.groups.find(g => g.id === State.addingSiblingTo);
         if (group) {
             group.paths.push([...State.activePath]);
@@ -666,7 +676,6 @@ function finishPath() {
         State.activePath = [];
         render();
     } else {
-        // New Group -> Prompt Label
         showLabelInput();
     }
 }
@@ -686,10 +695,17 @@ function showLabelInput() {
 
 function commitLabel() {
     const label = ui.labelText.value.trim() || "Untitled";
+    
+    // Auto-pick color
+    const palette = State.colorBlindMode ? PALETTE_CVD : PALETTE_STD;
+    const nextColor = palette[State.groups.length % palette.length];
+    State.color = nextColor;
+    ui.colorPicker.value = nextColor;
+
     const newGroup = {
         id: Date.now().toString(),
         label: label,
-        color: State.color,
+        color: nextColor,
         paths: [[...State.activePath]]
     };
     
@@ -733,8 +749,6 @@ function deleteSelected() {
 
 function deleteVertex() {
     ui.ctxMenu.style.display = 'none';
-    // We need to know which vertex was right-clicked. 
-    // We store this in a temp variable during context menu open, or check hover
     if (State.hoveredVertex) {
         const { groupId, pathIdx, ptIdx } = State.hoveredVertex;
         const path = State.groups[groupId].paths[pathIdx];
@@ -748,6 +762,14 @@ function deleteVertex() {
     }
 }
 
+function refreshColors() {
+    const palette = State.colorBlindMode ? PALETTE_CVD : PALETTE_STD;
+    State.groups.forEach((g, i) => {
+        g.color = palette[i % palette.length];
+    });
+    updateLayerUI();
+}
+
 /**
  * --------------------------------------------------------------------------
  * RENDERING
@@ -755,134 +777,148 @@ function deleteVertex() {
  */
 function renderLoop() {
     requestAnimationFrame(renderLoop);
-    // Only render if dirty? For now, continuous for smooth UI
-    // render(); 
 }
 
-function render() {
-    // Clear
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function render(targetCtx = ctx, isExport = false) {
+    const w = isExport ? State.image.width : canvas.width;
+    const h = isExport ? State.image.height : canvas.height;
+
+    // Reset Transform
+    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+    targetCtx.clearRect(0, 0, w, h);
     
-    // Apply Viewport Transform
-    ctx.setTransform(State.scale, 0, 0, State.scale, State.panX, State.panY);
+    // Apply Transform (only for screen render)
+    if (!isExport) {
+        targetCtx.setTransform(State.scale, 0, 0, State.scale, State.panX, State.panY);
+    }
 
     // 1. Draw Image
     if (State.image) {
-        ctx.drawImage(State.image, 0, 0);
+        targetCtx.drawImage(State.image, 0, 0);
     }
 
     // 2. Draw Groups
     State.groups.forEach(group => {
-        const isSelected = group.id === State.selectedGroupId;
-        ctx.fillStyle = hexToRgba(group.color, State.opacity);
-        ctx.strokeStyle = isSelected ? '#fff' : group.color;
-        ctx.lineWidth = State.strokeWidth / State.scale;
+        const isSelected = !isExport && group.id === State.selectedGroupId;
+        targetCtx.fillStyle = hexToRgba(group.color, State.opacity);
+        targetCtx.strokeStyle = isSelected ? '#fff' : group.color;
+        targetCtx.lineWidth = (State.strokeWidth) / (isExport ? 1 : State.scale);
 
         group.paths.forEach(path => {
-            ctx.beginPath();
-            ctx.moveTo(path[0].x, path[0].y);
-            for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+            targetCtx.beginPath();
+            targetCtx.moveTo(path[0].x, path[0].y);
+            for (let i = 1; i < path.length; i++) targetCtx.lineTo(path[i].x, path[i].y);
+            targetCtx.closePath();
+            targetCtx.fill();
+            targetCtx.stroke();
             
             if (isSelected) {
-                // Dashed border for selection
-                ctx.strokeStyle = group.color;
-                ctx.setLineDash([5 / State.scale, 5 / State.scale]);
-                ctx.stroke();
-                ctx.setLineDash([]);
+                targetCtx.strokeStyle = group.color;
+                targetCtx.setLineDash([5 / State.scale, 5 / State.scale]);
+                targetCtx.stroke();
+                targetCtx.setLineDash([]);
                 
-                // Draw Vertices
-                ctx.fillStyle = '#fff';
+                // Vertices
+                targetCtx.fillStyle = '#fff';
                 const r = Config.vertexRadius / State.scale;
                 for (let p of path) {
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
-                    ctx.fill();
-                    ctx.stroke(); // inherit color
+                    targetCtx.beginPath();
+                    targetCtx.arc(p.x, p.y, r, 0, Math.PI*2);
+                    targetCtx.fill();
+                    targetCtx.stroke();
                 }
             }
         });
 
         // Labels
-        if (group.paths.length > 0) drawLabel(group);
+        if (group.paths.length > 0) drawLabel(targetCtx, group, isExport);
     });
 
-    // 3. Draw Active Path (Being drawn)
-    if (State.activePath.length > 0) {
-        ctx.beginPath();
-        ctx.moveTo(State.activePath[0].x, State.activePath[0].y);
-        for (let i = 1; i < State.activePath.length; i++) ctx.lineTo(State.activePath[i].x, State.activePath[i].y);
+    // 3. Active Path (Screen only)
+    if (!isExport && State.activePath.length > 0) {
+        targetCtx.beginPath();
+        targetCtx.moveTo(State.activePath[0].x, State.activePath[0].y);
+        for (let i = 1; i < State.activePath.length; i++) targetCtx.lineTo(State.activePath[i].x, State.activePath[i].y);
         
-        ctx.strokeStyle = State.color;
-        ctx.lineWidth = State.strokeWidth / State.scale;
-        ctx.stroke();
+        targetCtx.strokeStyle = State.color;
+        targetCtx.lineWidth = State.strokeWidth / State.scale;
+        targetCtx.stroke();
 
-        // Rubber band line to mouse
-        if (!State.isDragging) {
-            const last = State.activePath[State.activePath.length - 1];
-            const mouse = getWorldPoint({ clientX: State.lastMouse.x, clientY: State.lastMouse.y }); // Approximation
-            // Actually we need real mouse pos, stored in onMouseMove
-            // Let's use the last known mouse pos converted
-            // (Skipping exact rubber band for this snippet to save space, but the logic is here)
-        }
-
-        // Highlight Start Point for closure
+        // Start Point
         const start = State.activePath[0];
-        ctx.beginPath();
-        ctx.arc(start.x, start.y, (Config.snapDist / State.scale), 0, Math.PI*2);
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
-        ctx.fill();
+        targetCtx.beginPath();
+        targetCtx.arc(start.x, start.y, (Config.snapDist / State.scale), 0, Math.PI*2);
+        targetCtx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+        targetCtx.fill();
     }
 
-    // 4. Highlight Hovered Vertex/Edge
-    if (State.hoveredVertex) {
+    // 4. Hover (Screen only)
+    if (!isExport && State.hoveredVertex) {
         const { groupId, pathIdx, ptIdx } = State.hoveredVertex;
         const pt = State.groups[groupId].paths[pathIdx][ptIdx];
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, (Config.vertexRadius + 2) / State.scale, 0, Math.PI*2);
-        ctx.fillStyle = 'red';
-        ctx.fill();
-    } else if (State.hoveredEdge) {
-        // Draw preview point
-        // (Simplified: just cursor change handled in CSS/Logic)
+        targetCtx.beginPath();
+        targetCtx.arc(pt.x, pt.y, (Config.vertexRadius + 2) / State.scale, 0, Math.PI*2);
+        targetCtx.fillStyle = 'red';
+        targetCtx.fill();
     }
 }
 
-function drawLabel(group) {
-    // Find largest path
+function drawLabel(ctx, group, isExport) {
     let path = group.paths.reduce((a, b) => a.length > b.length ? a : b);
     const center = getCentroid(path);
     const bounds = getBounds(path);
+    const scale = isExport ? 1 : State.scale;
     
-    ctx.font = `bold ${14 / State.scale}px sans-serif`;
+    ctx.font = `bold ${14 / scale}px sans-serif`;
     const text = group.label;
     const metrics = ctx.measureText(text);
-    const w = metrics.width + 10 / State.scale;
-    const h = 20 / State.scale;
+    const padding = 6 / scale;
+    const w = metrics.width + (padding * 2);
+    const h = 24 / scale;
     
     let x, y;
+    
     if (State.labelMode === 'inside') {
-        x = center.x; y = center.y;
+        x = center.x; 
+        y = center.y;
     } else {
-        x = State.image.width + (w/2) + (20/State.scale); // Margin
+        // MATLAB Style: Right margin INSIDE image
+        const margin = 10 / scale;
+        x = State.image.width - (w/2) - margin;
         y = bounds.cy;
+        
+        // Clamp Y to stay inside image
+        y = Math.max(h, Math.min(State.image.height - h, y));
+
         // Leader line
         ctx.beginPath();
         ctx.moveTo(bounds.maxX, bounds.cy);
         ctx.lineTo(x - w/2, y);
         ctx.strokeStyle = group.color;
-        ctx.lineWidth = 1 / State.scale;
+        ctx.lineWidth = 1.5 / scale;
         ctx.stroke();
+        
+        // Dot at object edge
+        ctx.beginPath();
+        ctx.arc(bounds.maxX, bounds.cy, 3/scale, 0, Math.PI*2);
+        ctx.fillStyle = group.color;
+        ctx.fill();
     }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    // Label Box
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.fillRect(x - w/2, y - h/2, w, h);
+    ctx.shadowBlur = 0;
+
+    // Border
     ctx.strokeStyle = group.color;
+    ctx.lineWidth = 2 / scale;
     ctx.strokeRect(x - w/2, y - h/2, w, h);
-    ctx.fillStyle = '#000';
+
+    // Text
+    ctx.fillStyle = "#000";
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y);
@@ -890,7 +926,7 @@ function drawLabel(group) {
 
 /**
  * --------------------------------------------------------------------------
- * HELPERS & MATH
+ * HELPERS
  * --------------------------------------------------------------------------
  */
 function getWorldPoint(e) {
@@ -933,7 +969,7 @@ function updateHoverState(pt) {
         }
     }
 
-    // Check Edges (for insert)
+    // Check Edges
     for (let i = 0; i < group.paths.length; i++) {
         const path = group.paths[i];
         for (let j = 0; j < path.length; j++) {
@@ -942,7 +978,7 @@ function updateHoverState(pt) {
             const dist = distToSegment(pt, p1, p2);
             if (dist < hitDist) {
                 State.hoveredEdge = { groupId: State.groups.indexOf(group), pathIdx: i, ptIdx: j };
-                container.style.cursor = 'copy'; // Indicates "Add"
+                container.style.cursor = 'copy';
                 render();
                 return;
             }
@@ -962,7 +998,6 @@ function distToSegment(p, v, w) {
 }
 
 function findGroupHit(pt) {
-    // Check top-most first
     for (let i = State.groups.length - 1; i >= 0; i--) {
         const group = State.groups[i];
         for (let path of group.paths) {
@@ -998,7 +1033,6 @@ function getBounds(path) {
     return { minX, minY, maxX, maxY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
 }
 
-// Douglas-Peucker Simplification
 function simplifyPath(points, epsilon) {
     if (points.length <= 2) return points;
     let dmax = 0, index = 0;
@@ -1039,13 +1073,11 @@ function loadFile(file) {
     reader.readAsDataURL(file);
 }
 
-function exportData() {
+function exportJSON() {
     if (!State.image) return;
-    
-    // 1. Export JSON
     const data = {
-        version: "2.5",
-        image: State.image.src.substring(0, 50) + "...", // Truncated for demo
+        version: "3.0",
+        image: State.image.src.substring(0, 50) + "...",
         width: State.image.width,
         height: State.image.height,
         annotations: State.groups.map(g => ({
@@ -1054,36 +1086,29 @@ function exportData() {
             polygons: g.paths
         }))
     };
-    
     const jsonBlob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
     const url = URL.createObjectURL(jsonBlob);
     const a = document.createElement('a');
     a.href = url;
     a.download = "annotations.json";
     a.click();
+}
 
-    // 2. Export Mask Image
-    // Create temp canvas
+function exportImage() {
+    if (!State.image) return;
+    
+    // Create temp canvas at full image resolution
     const tCanvas = document.createElement('canvas');
     tCanvas.width = State.image.width;
     tCanvas.height = State.image.height;
     const tCtx = tCanvas.getContext('2d');
     
-    // Draw masks only
-    State.groups.forEach(g => {
-        tCtx.fillStyle = g.color; // Solid color for mask
-        g.paths.forEach(p => {
-            tCtx.beginPath();
-            tCtx.moveTo(p[0].x, p[0].y);
-            for(let i=1; i<p.length; i++) tCtx.lineTo(p[i].x, p[i].y);
-            tCtx.closePath();
-            tCtx.fill();
-        });
-    });
+    // Render clean version (isExport = true)
+    render(tCtx, true);
     
     const link = document.createElement('a');
-    link.download = 'mask.png';
-    link.href = tCanvas.toDataURL();
+    link.download = 'annotated_image.png';
+    link.href = tCanvas.toDataURL('image/png');
     link.click();
 }
 
@@ -1128,12 +1153,10 @@ function zoom(dir, cx, cy) {
     const factor = dir > 0 ? (1 + Config.zoomStep) : (1 - Config.zoomStep);
     const newScale = Math.max(Config.minZoom, Math.min(Config.maxZoom, State.scale * factor));
     
-    // Zoom towards mouse or center
     const rect = canvas.getBoundingClientRect();
     const mx = cx !== undefined ? cx - rect.left : rect.width / 2;
     const my = cy !== undefined ? cy - rect.top : rect.height / 2;
 
-    // Calculate offset to keep mouse point stable
     State.panX = mx - (mx - State.panX) * (newScale / State.scale);
     State.panY = my - (my - State.panY) * (newScale / State.scale);
     State.scale = newScale;
@@ -1143,7 +1166,6 @@ function zoom(dir, cx, cy) {
 
 function resetView() {
     if (!State.image) return;
-    // Fit image to screen
     const rect = container.getBoundingClientRect();
     const scaleW = rect.width / State.image.width;
     const scaleH = rect.height / State.image.height;
@@ -1180,7 +1202,6 @@ function showStatus(msg) {
 }
 
 function saveState() {
-    // Simple deep copy for history
     const snapshot = JSON.stringify(State.groups);
     if (State.historyIdx < State.history.length - 1) {
         State.history = State.history.slice(0, State.historyIdx + 1);
